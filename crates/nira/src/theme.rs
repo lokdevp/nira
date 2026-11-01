@@ -164,11 +164,38 @@ fn refresh_theme() {
         theme_def(&id)
     };
     if let Some(settings) = gtk::Settings::default() {
-        if settings.is_gtk_application_prefer_dark_theme() != theme.dark {
-            settings.set_gtk_application_prefer_dark_theme(theme.dark);
-        }
+        set_dialogs_dark(&settings, theme.dark);
     }
     load_palette(theme);
+}
+
+/// GTK ≥ 4.20 property for light/dark; it replaces the deprecated
+/// `gtk-application-prefer-dark-theme`, which now warns when set.
+const COLOR_SCHEME: &str = "gtk-interface-color-scheme";
+
+/// Make GTK's own widgets (dialogs, menus) dark or light.
+fn set_dialogs_dark(settings: &gtk::Settings, dark: bool) {
+    use gtk::glib::prelude::*;
+    // Looked up by name: the bindings target GTK 4.12, which lacks it.
+    let value = settings.find_property(COLOR_SCHEME).and_then(|pspec| {
+        gtk::glib::EnumClass::with_type(pspec.value_type())?
+            .to_value_by_nick(if dark { "dark" } else { "light" })
+    });
+    match value {
+        Some(value) => {
+            let number = |v: &gtk::glib::Value| {
+                gtk::glib::EnumValue::from_value(v).map(|(_, e)| e.value())
+            };
+            if number(&settings.property_value(COLOR_SCHEME)) != number(&value) {
+                settings.set_property_from_value(COLOR_SCHEME, &value);
+            }
+        }
+        None => {
+            if settings.is_gtk_application_prefer_dark_theme() != dark {
+                settings.set_gtk_application_prefer_dark_theme(dark);
+            }
+        }
+    }
 }
 
 /// The desktop's light/dark preference: the freedesktop portal's colour
@@ -213,11 +240,15 @@ fn portal_color_scheme() -> Option<u32> {
             gtk::gio::Cancellable::NONE,
         )
         .ok()?;
-    // `Read` wraps the value in one or two variants depending on the
-    // portal's version.
-    let mut value = reply.child_value(0);
-    while let Some(inner) = value.as_variant() {
-        value = inner;
+    unwrap_u32(reply.child_value(0))
+}
+
+/// The `u32` inside `value`, which `Read` wraps in one or two variants
+/// depending on the portal's version. `as_variant` on anything that isn't a
+/// variant makes GLib print a critical, so the type is checked first.
+fn unwrap_u32(mut value: gtk::glib::Variant) -> Option<u32> {
+    while value.is_type(gtk::glib::VariantTy::VARIANT) {
+        value = value.as_variant()?;
     }
     value.get::<u32>()
 }
@@ -294,6 +325,18 @@ mod tests {
                 "no theme-{id} string"
             );
         }
+    }
+
+    #[test]
+    fn portal_values_unwrap_without_criticals() {
+        use gtk::glib::prelude::*;
+        use gtk::glib::Variant;
+        let once = Variant::from_variant(&1u32.to_variant());
+        let twice = Variant::from_variant(&once);
+        assert_eq!(unwrap_u32(1u32.to_variant()), Some(1));
+        assert_eq!(unwrap_u32(once), Some(1));
+        assert_eq!(unwrap_u32(twice), Some(1));
+        assert_eq!(unwrap_u32("dark".to_variant()), None);
     }
 
     #[test]
