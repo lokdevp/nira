@@ -1,5 +1,5 @@
-/* The dark palette: the "Comic Reader Wireframe" design's colours. Every
- * name here needs a light value in palette-light.css too. */
+/* Nira Dark: the "Comic Reader Wireframe" design's colours, and the
+ * default. Every theme in this folder defines the same @nira_* names. */
 @define-color nira_bg #16171A;
 @define-color nira_chrome #111214;
 @define-color nira_chrome_border #24272C;
@@ -19,6 +19,7 @@
 @define-color nira_text_faint #8A9098;
 @define-color nira_text_seg #B4BAC1;
 @define-color nira_accent #4C8DFF;
+@define-color nira_on_accent #FFFFFF;
 @define-color nira_accent_hover #6A9FFF;
 @define-color nira_link #8DB6FF;
 @define-color nira_link_hover #B5CFFF;

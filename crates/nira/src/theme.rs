@@ -1,10 +1,10 @@
-//! The app stylesheet with its light or dark palette, the window icon and
-//! the runtime viewer background.
+//! The app stylesheet and its colour themes, the window icon and the
+//! runtime viewer background.
 
-use std::cell::{Cell, OnceCell};
+use std::cell::{Cell, OnceCell, RefCell};
 
 use gtk::gdk;
-use nira_core::settings::{Settings, Theme};
+use nira_core::settings::{Settings, THEME_DEFAULT, THEME_SYSTEM};
 
 /// The app icon, for runs where it isn't installed in the icon theme
 /// (`cargo run`, the Windows zip, a copied binary).
@@ -34,31 +34,73 @@ pub fn ensure_app_icon() {
     theme.add_search_path(&dir);
 }
 
-/// The main window's stylesheet; the palette goes in front of it.
+/// The main window's stylesheet; the theme's palette goes in front of it.
 const STYLE: &str = include_str!("style.css");
-const PALETTE_DARK: &str = include_str!("palette-dark.css");
-const PALETTE_LIGHT: &str = include_str!("palette-light.css");
 
-/// Install the stylesheet for the whole display (once), with the dark
-/// palette until `apply_theme` picks one.
-pub fn load_css() {
-    load_palette(true);
+/// A colour theme: a palette of `@nira_*` colours for `style.css`.
+pub struct ThemeDef {
+    /// The settings value; its name is the string `theme-<id>`.
+    pub id: &'static str,
+    /// Dark themes also make GTK's own dialogs dark.
+    pub dark: bool,
+    css: &'static str,
 }
 
-/// (Re)load the main stylesheet with the dark or light palette.
-fn load_palette(dark: bool) {
+macro_rules! themes {
+    ($($id:literal => $dark:literal),* $(,)?) => {
+        &[$(ThemeDef {
+            id: $id,
+            dark: $dark,
+            css: include_str!(concat!("themes/", $id, ".css")),
+        }),*]
+    };
+}
+
+/// Every theme, in the order Preferences lists them. Each file in
+/// `themes/` defines the same colour names (a test checks).
+pub const THEMES: &[ThemeDef] = themes![
+    "dark" => true,
+    "light" => false,
+    "solarized-dark" => true,
+    "solarized-light" => false,
+    "vscode-dark" => true,
+    "vscode-light" => false,
+    "nord" => true,
+    "dracula" => true,
+    "gruvbox-dark" => true,
+    "gruvbox-light" => false,
+    "catppuccin-mocha" => true,
+    "catppuccin-latte" => false,
+];
+
+/// The theme with this id, or the default for an unknown one.
+pub fn theme_def(id: &str) -> &'static ThemeDef {
+    THEMES
+        .iter()
+        .find(|t| t.id == id)
+        .or_else(|| THEMES.iter().find(|t| t.id == THEME_DEFAULT))
+        .unwrap_or(&THEMES[0])
+}
+
+/// Install the stylesheet for the whole display (once), with the default
+/// theme until `apply_theme` picks one.
+pub fn load_css() {
+    load_palette(theme_def(THEME_DEFAULT));
+}
+
+/// (Re)load the main stylesheet with `theme`'s palette.
+fn load_palette(theme: &'static ThemeDef) {
     STATE.with(|state| {
-        if state.dark.get() == Some(dark) {
+        if state.loaded.get() == Some(theme.id) {
             return;
         }
-        state.dark.set(Some(dark));
+        state.loaded.set(Some(theme.id));
         let provider = state.style.get_or_init(|| {
             let p = gtk::CssProvider::new();
             add_provider(&p, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
             p
         });
-        let palette = if dark { PALETTE_DARK } else { PALETTE_LIGHT };
-        provider.load_from_string(&format!("{palette}\n{STYLE}"));
+        provider.load_from_string(&format!("{}\n{STYLE}", theme.css));
     });
 }
 
@@ -79,10 +121,10 @@ thread_local! {
 struct ThemeState {
     /// The main stylesheet's provider.
     style: OnceCell<gtk::CssProvider>,
-    /// The palette loaded into it.
-    dark: Cell<Option<bool>>,
+    /// The theme loaded into it.
+    loaded: Cell<Option<&'static str>>,
     /// The theme setting, read again when the desktop's preference changes.
-    theme: Cell<Theme>,
+    theme: RefCell<String>,
     /// Whether the desktop's preference is being watched.
     watching: Cell<bool>,
 }
@@ -105,27 +147,28 @@ pub fn apply_background(settings: &Settings, page: Option<[u8; 3]>) {
     });
 }
 
-/// Light or dark for the main window and GTK's own dialogs. `System`
-/// follows the desktop and keeps following it while the app runs.
-pub fn apply_theme(theme: Theme) {
-    STATE.with(|state| state.theme.set(theme));
+/// Colour the main window with theme `id` (`"system"` follows the
+/// desktop's light/dark preference, and keeps following it while the app
+/// runs). GTK's own dialogs follow the theme's lightness.
+pub fn apply_theme(id: &str) {
+    STATE.with(|state| state.theme.replace(id.to_string()));
     watch_system();
     refresh_theme();
 }
 
 fn refresh_theme() {
-    let theme = STATE.with(|state| state.theme.get());
-    let dark = match theme {
-        Theme::Dark => true,
-        Theme::Light => false,
-        Theme::System => system_prefers_dark(),
+    let id = STATE.with(|state| state.theme.borrow().clone());
+    let theme = if id == THEME_SYSTEM {
+        theme_def(if system_prefers_dark() { "dark" } else { "light" })
+    } else {
+        theme_def(&id)
     };
     if let Some(settings) = gtk::Settings::default() {
-        if settings.is_gtk_application_prefer_dark_theme() != dark {
-            settings.set_gtk_application_prefer_dark_theme(dark);
+        if settings.is_gtk_application_prefer_dark_theme() != theme.dark {
+            settings.set_gtk_application_prefer_dark_theme(theme.dark);
         }
     }
-    load_palette(dark);
+    load_palette(theme);
 }
 
 /// The desktop's light/dark preference: the freedesktop portal's colour
@@ -186,7 +229,7 @@ fn watch_system() {
         return;
     }
     let on_change = || {
-        if STATE.with(|state| state.theme.get()) == Theme::System {
+        if STATE.with(|state| *state.theme.borrow() == THEME_SYSTEM) {
             refresh_theme();
         }
     };
@@ -204,5 +247,58 @@ fn watch_system() {
             gtk::gio::DBusSignalFlags::NONE,
             move |_, _, _, _, _, _| on_change(),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    fn names(css: &str) -> BTreeSet<&str> {
+        css.lines()
+            .filter_map(|l| l.strip_prefix("@define-color "))
+            .filter_map(|l| l.split_whitespace().next())
+            .collect()
+    }
+
+    #[test]
+    fn every_theme_defines_the_same_colours() {
+        let reference = names(theme_def(THEME_DEFAULT).css);
+        assert!(reference.len() > 30);
+        for theme in THEMES {
+            assert_eq!(names(theme.css), reference, "theme {}", theme.id);
+        }
+    }
+
+    #[test]
+    fn style_uses_only_defined_colours() {
+        let defined = names(theme_def(THEME_DEFAULT).css);
+        for word in STYLE.split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '@')) {
+            // "@nira_*" in comments leaves "@nira_".
+            if let Some(name) = word.strip_prefix('@').filter(|n| !n.ends_with('_')) {
+                assert!(defined.contains(name), "style.css uses undefined @{name}");
+            }
+        }
+    }
+
+    #[test]
+    fn theme_ids_are_unique_and_named() {
+        let ids: BTreeSet<_> = THEMES.iter().map(|t| t.id).collect();
+        assert_eq!(ids.len(), THEMES.len());
+        assert!(!ids.contains(THEME_SYSTEM));
+        let ftl = include_str!("../../../i18n/en-US/nira.ftl");
+        for id in ids {
+            assert!(
+                ftl.lines().any(|l| l.starts_with(&format!("theme-{id} ="))),
+                "no theme-{id} string"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_theme_falls_back_to_the_default() {
+        assert_eq!(theme_def("no-such-theme").id, THEME_DEFAULT);
+        assert_eq!(theme_def("nord").id, "nord");
     }
 }

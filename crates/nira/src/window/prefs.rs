@@ -5,7 +5,7 @@
 use gtk::glib;
 use gtk::prelude::*;
 use nira_core::i18n::t;
-use nira_core::settings::{Settings, Theme};
+use nira_core::settings::{Settings, THEME_SYSTEM};
 use nira_core::zoom::{FitMode, FitSizeAxis};
 
 use super::NiraWindow;
@@ -152,7 +152,7 @@ impl NiraWindow {
             }
             fit_changed
         });
-        theme::apply_theme(s.appearance.theme);
+        theme::apply_theme(&s.appearance.theme);
         self.set_action_state("cover-alone", s.view.cover_alone.to_variant());
         if fit_changed {
             self.set_fit(s.view.fit);
@@ -179,6 +179,28 @@ impl NiraWindow {
 
         // Reading.
         let p = Page::new();
+        p.heading(&t("prefs-appearance"));
+        // "Follow the system", then every theme.
+        let mut themes = vec![t("prefs-theme-system")];
+        themes.extend(theme::THEMES.iter().map(|th| t(&format!("theme-{}", th.id))));
+        self.pref_choice(
+            &p,
+            &t("prefs-theme"),
+            &themes,
+            |s| {
+                theme::THEMES
+                    .iter()
+                    .position(|th| th.id == s.appearance.theme)
+                    .map_or(0, |i| i as u32 + 1)
+            },
+            |s, i| {
+                s.appearance.theme = match i.checked_sub(1) {
+                    Some(i) => theme::THEMES.get(i as usize).map_or(THEME_SYSTEM, |th| th.id),
+                    None => THEME_SYSTEM,
+                }
+                .to_string()
+            },
+        );
         p.heading(&t("prefs-fit"));
         let fits: Vec<String> = FitMode::ALL
             .iter()
@@ -278,28 +300,6 @@ impl NiraWindow {
             Some(&t("prefs-exif-hint")),
             |s| s.view.exif_rotation,
             |s, v| s.view.exif_rotation = v,
-        );
-        let themes = [
-            t("prefs-theme-system"),
-            t("prefs-theme-dark"),
-            t("prefs-theme-light"),
-        ];
-        self.pref_choice(
-            &p,
-            &t("prefs-theme"),
-            &themes,
-            |s| match s.appearance.theme {
-                Theme::System => 0,
-                Theme::Dark => 1,
-                Theme::Light => 2,
-            },
-            |s, i| {
-                s.appearance.theme = match i {
-                    1 => Theme::Dark,
-                    2 => Theme::Light,
-                    _ => Theme::System,
-                }
-            },
         );
         self.pref_switch(
             &p,

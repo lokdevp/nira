@@ -114,7 +114,7 @@ fn activate(app: &gtk::Application, args: &Args) {
     theme::ensure_app_icon();
     gtk::Window::set_default_icon_name("nira");
     theme::load_css();
-    theme::apply_theme(settings.appearance.theme);
+    theme::apply_theme(&settings.appearance.theme);
     let reopen = settings.files.reopen_last;
     let win = NiraWindow::new(app, settings);
     if fullscreen {

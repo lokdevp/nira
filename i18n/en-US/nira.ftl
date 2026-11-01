@@ -187,10 +187,9 @@ prefs-window = Window
 prefs-start-fullscreen = Start in focus mode
 prefs-exif = Rotate photos by their EXIF orientation
 prefs-exif-hint = For pages taken with a camera or phone.
+prefs-appearance = Appearance
 prefs-theme = Theme
-prefs-theme-system = Follow the system
-prefs-theme-dark = Dark
-prefs-theme-light = Light
+prefs-theme-system = Follow the system (Nira Dark or Light)
 prefs-page-numbers = Page numbers under thumbnails
 prefs-smart-scroll = Space bar
 prefs-smart-scroll-on = Smart scroll
@@ -227,3 +226,19 @@ go-to-page-go = Go
 
 about-comments = A comic book and manga viewer. Reads ZIP, RAR, 7Z, TAR, LHA and PDF archives, and folders of images.
 about-website = Project website
+
+## Colour themes (Preferences › Appearance). `theme-<id>` for each theme
+## in crates/nira/src/themes/.
+
+theme-dark = Nira Dark
+theme-light = Nira Light
+theme-solarized-dark = Solarized Dark
+theme-solarized-light = Solarized Light
+theme-vscode-dark = VS Code Dark
+theme-vscode-light = VS Code Light
+theme-nord = Nord
+theme-dracula = Dracula
+theme-gruvbox-dark = Gruvbox Dark
+theme-gruvbox-light = Gruvbox Light
+theme-catppuccin-mocha = Catppuccin Mocha
+theme-catppuccin-latte = Catppuccin Latte

@@ -1,7 +1,7 @@
 /* Main-window chrome, from the "Comic Reader Wireframe" design. Colours
- * are palette names (@nira_*) from palette-dark.css or palette-light.css,
- * which theme.rs puts in front of this file. Literal colours are the ones
- * that stay the same in both: things drawn over the page (OSD, lens, click
+ * are palette names (@nira_*) from the chosen theme in themes/, which
+ * theme.rs puts in front of this file. Literal colours are the ones
+ * that stay the same in every theme: things drawn over the page (OSD, lens, click
  * zones), the background swatches and the paper placeholders. The viewer
  * background comes from the settings at runtime (theme.rs). */
 
@@ -86,15 +86,15 @@ window.nira-main button.accent {
   border-radius: 10px;
   background: @nira_accent;
   box-shadow: none;
-  color: #FFFFFF;
+  color: @nira_on_accent;
   font-weight: 500;
 }
 window.nira-main button.accent:hover {
   background: @nira_accent_hover;
 }
 window.nira-main button.accent .kbd {
-  color: #FFFFFF;
-  border-color: rgba(255, 255, 255, 0.5);
+  color: @nira_on_accent;
+  border-color: alpha(@nira_on_accent, 0.5);
 }
 
 window.nira-main button.link {

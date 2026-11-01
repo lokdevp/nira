@@ -62,21 +62,18 @@ impl Default for View {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Theme {
-    /// Follow the desktop's light/dark preference.
-    System,
-    /// The design's dark palette.
-    #[default]
-    Dark,
-    Light,
-}
+/// `Appearance::theme` value that follows the desktop's light/dark
+/// preference (Nira Dark or Nira Light).
+pub const THEME_SYSTEM: &str = "system";
+/// The default theme: the design's dark palette.
+pub const THEME_DEFAULT: &str = "dark";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Appearance {
-    pub theme: Theme,
+    /// Colour theme id (the app's theme list, e.g. `"solarized-dark"`), or
+    /// `"system"`. Unknown ids fall back to the default.
+    pub theme: String,
     /// Viewer background, RGB.
     pub background: [u8; 3],
     /// Colour the viewer after the shown page's border instead.
@@ -93,7 +90,7 @@ pub struct Appearance {
 impl Default for Appearance {
     fn default() -> Self {
         Appearance {
-            theme: Theme::Dark,
+            theme: THEME_DEFAULT.to_string(),
             background: [0x0E, 0x0F, 0x11],
             match_page_color: false,
             show_thumbnails: true,
@@ -279,8 +276,16 @@ mod tests {
         let mut s = Settings::default();
         s.view.fit = FitMode::Width;
         s.view.fit_size.axis = FitSizeAxis::Both;
-        s.appearance.theme = Theme::Light;
+        s.appearance.theme = "solarized-dark".to_string();
         assert_eq!(Settings::from_toml(&s.to_toml()).unwrap(), s);
+    }
+
+    #[test]
+    fn old_theme_values_still_load() {
+        for theme in ["system", "dark", "light"] {
+            let s = Settings::from_toml(&format!("[appearance]\ntheme = \"{theme}\"\n")).unwrap();
+            assert_eq!(s.appearance.theme, theme);
+        }
     }
 
     #[test]

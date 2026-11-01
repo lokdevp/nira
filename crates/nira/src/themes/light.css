@@ -1,4 +1,4 @@
-/* The light palette: the same names as palette-dark.css. */
+/* Nira Light. */
 @define-color nira_bg #F3F3F1;
 @define-color nira_chrome #E8E8E5;
 @define-color nira_chrome_border #D8D9DC;
@@ -15,9 +15,10 @@
 @define-color nira_text #1B1C1F;
 @define-color nira_text_soft #3A3E44;
 @define-color nira_text_dim #5C6269;
-@define-color nira_text_faint #6A7077;
+@define-color nira_text_faint #5D636A;
 @define-color nira_text_seg #474C53;
 @define-color nira_accent #2F6FE0;
+@define-color nira_on_accent #FFFFFF;
 @define-color nira_accent_hover #4A82E8;
 @define-color nira_link #1E5ECC;
 @define-color nira_link_hover #15489F;
