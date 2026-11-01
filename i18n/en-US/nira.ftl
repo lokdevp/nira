@@ -162,6 +162,7 @@ lens-label = Lens { $zoom }× · scroll to change
 ## Preferences
 
 panel-all-settings = All settings…
+panel-about = About
 prefs-title = Preferences
 prefs-tab-reading = Reading
 prefs-tab-scrolling = Scrolling
@@ -224,6 +225,5 @@ go-to-page-go = Go
 
 ## About
 
-about-title = About Nira
 about-comments = A comic book and manga viewer. Reads ZIP, RAR, 7Z, TAR, LHA and PDF archives, and folders of images.
 about-website = Project website

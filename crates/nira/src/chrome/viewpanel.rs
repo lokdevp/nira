@@ -205,18 +205,23 @@ impl ViewPanel {
         let spacer = gtk::Box::new(gtk::Orientation::Vertical, 0);
         spacer.set_vexpand(true);
         body.append(&spacer);
-        let footer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        // Footer: "Reset to defaults" above "All settings…" and "About".
+        let footer = gtk::Box::new(gtk::Orientation::Vertical, 0);
         footer.add_css_class("panel-footer");
-        let reset = gtk::Button::with_label(&t("panel-reset"));
-        reset.add_css_class("link");
-        reset.set_action_name(Some("win.reset-view"));
-        reset.set_hexpand(true);
-        reset.set_halign(gtk::Align::Start);
-        footer.append(&reset);
-        let all = gtk::Button::with_label(&t("panel-all-settings"));
-        all.add_css_class("link");
-        all.set_action_name(Some("win.preferences"));
-        footer.append(&all);
+        let link = |text: &str, action: &str| {
+            let b = gtk::Button::with_label(text);
+            b.add_css_class("link");
+            b.set_action_name(Some(action));
+            b.set_halign(gtk::Align::Start);
+            b
+        };
+        footer.append(&link(&t("panel-reset"), "win.reset-view"));
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        let all = link(&t("panel-all-settings"), "win.preferences");
+        all.set_hexpand(true);
+        row.append(&all);
+        row.append(&link(&t("panel-about"), "win.about"));
+        footer.append(&row);
         body.append(&footer);
 
         let root = gtk::ScrolledWindow::new();
