@@ -1,0 +1,67 @@
+# Maintainer: lokesh <lokdevp@gmail.com>
+# Binary package: downloads the prebuilt Linux artifact from the GitHub
+# release and installs it (no compilation). Bump pkgver to match a published
+# release tag (e.g. v0.1.0).
+
+pkgname=nira-bin
+pkgver=0.4.1
+pkgrel=1
+pkgdesc="A comic book and manga viewer for GTK4"
+arch=('x86_64')
+url="https://github.com/lokdevp/nira"
+license=('GPL2')
+provides=('nira')
+depends=(
+    'gtk4'
+    'gdk-pixbuf2'
+    'glib2'
+    'pango'
+    'cairo'
+    'xz'
+    'bzip2'
+)
+optdepends=(
+    'unrar: for CBR/RAR archive support'
+    'p7zip: for 7Zip/LHA archive support'
+    'mupdf-tools: for PDF support'
+)
+source=(
+    # The prebuilt x86_64 Linux binary from the release.
+    "nira-${pkgver}-x86_64-unknown-linux-gnu.tar.gz::https://github.com/lokdevp/nira/releases/download/v${pkgver}/nira-${pkgver}-x86_64-unknown-linux-gnu.tar.gz"
+    # The source archive at the same tag, for the .desktop/MIME/icons.
+    "nira-src-${pkgver}.tar.gz::https://github.com/lokdevp/nira/archive/refs/tags/v${pkgver}.tar.gz"
+)
+# Hashes are pinned for the current pkgver. When bumping pkgver to a new
+# release, regenerate them with:  updkgsums
+sha256sums=('a6d9ead53f7a4dec3ebab2b4c3b4ef1b3cf98fe81e342124d6be4a88e1a753c8'
+            'a612e029842bfdfbf0e56ee0c7b5784ae6cc25640a34c99705c5d89862ce8b6e')
+
+package() {
+    # Binary from the release artifact.
+    install -Dm755 "${srcdir}/nira" "${pkgdir}/usr/bin/nira"
+
+    # Data files from the source archive (locate it robustly; GitHub archive
+    # dirs are named <repo>-<tag>).
+    local linuxdir
+    linuxdir="$(dirname "$(find "${srcdir}" -path '*/packaging/linux/nira.desktop' | head -1)")"
+
+    install -Dm644 "${linuxdir}/nira.desktop" \
+        "${pkgdir}/usr/share/applications/nira.desktop"
+    install -Dm644 "${linuxdir}/nira.xml" \
+        "${pkgdir}/usr/share/mime/packages/nira.xml"
+
+    for d in 16x16 22x22 24x24 32x32 48x48 256x256; do
+        install -Dm644 "${linuxdir}/icons/${d}/apps/nira.png" \
+            "${pkgdir}/usr/share/icons/hicolor/${d}/apps/nira.png" 2>/dev/null || true
+    done
+}
+
+post_install() {
+    update-desktop-database -q 2>/dev/null || true
+    update-mime-database /usr/share/mime 2>/dev/null || true
+    gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor 2>/dev/null || true
+}
+
+post_upgrade() {
+    post_install
+}

@@ -1,0 +1,38 @@
+Source: nira
+Section: graphics
+Priority: optional
+Maintainer: lokesh <lokdevp@gmail.com>
+Build-Depends: debhelper-compat (= 13),
+               pkg-config,
+               libgtk-4-dev,
+               libgdk-pixbuf-2.0-dev,
+               libpango1.0-dev,
+               libcairo2-dev,
+               libglib2.0-dev,
+               liblzma-dev,
+               libbz2-dev,
+               desktop-file-utils,
+               shared-mime-info
+Standards-Version: 4.6.2
+Homepage: https://github.com/lokdevp/nira
+Rules-Requires-Root: no
+
+Package: nira
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         libgtk-4-1,
+         libgdk-pixbuf-2.0-0,
+         libglib2.0-0,
+         libpango-1.0-0,
+         libcairo2,
+         liblzma5,
+         libbz2-1.0
+Recommends: unrar,
+            p7zip-full,
+            mupdf-tools
+Description: GTK4 comic book viewer
+ Nira is a user-friendly, customizable comic book image viewer.
+ It is specifically designed to handle comic books (both Western
+ comics and manga) and supports a variety of container formats
+ including CBR, CBZ, CB7, CBT, LHA and PDF.

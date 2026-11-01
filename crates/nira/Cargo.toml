@@ -1,0 +1,36 @@
+[package]
+name = "nira"
+description = "A comic book and manga viewer for GTK4"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "nira"
+path = "src/main.rs"
+
+[dependencies]
+nira-core.workspace = true
+log.workspace = true
+gtk = { package = "gtk4", version = "0.9", features = ["v4_12"] }
+async-channel = "2"
+clap = { version = "4", features = ["derive"] }
+env_logger = "0.11"
+
+# Packaging metadata for `cargo deb -p nira` (Debian/Ubuntu .deb builds).
+[package.metadata.deb]
+maintainer = "lokesh <lokdevp@gmail.com>"
+copyright = "2026 Rippa The Hutt, lokesh"
+license-file = "../../COPYING"
+section = "graphics"
+priority = "optional"
+depends = "$auto, libgtk-4-1, libgdk-pixbuf-2.0-0, libglib2.0-0, libpango-1.0-0, libcairo2, liblzma5, libbz2-1.0"
+recommends = "unrar, p7zip-full, mupdf-tools"
+assets = [
+    ["target/release/nira", "usr/bin/", "755"],
+    ["../../packaging/linux/nira.desktop", "usr/share/applications/", "644"],
+    ["../../packaging/linux/nira.xml", "usr/share/mime/packages/", "644"],
+    ["../../packaging/linux/icons/**/*.png", "usr/share/icons/hicolor/", "644"],
+]

@@ -1,0 +1,652 @@
+/* Main-window chrome, from the "Comic Reader Wireframe" design: a fixed
+ * dark palette with a blue accent (#4C8DFF). The viewer background comes
+ * from the settings at runtime (theme.rs). Dialogs keep the plain GTK
+ * theme. */
+
+window.nira-main {
+  background-color: #16171A;
+  color: #ECEDEE;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 13px;
+}
+
+window.nira-main .mono,
+window.nira-main .page-num,
+window.nira-main .kbd,
+window.nira-main .chip {
+  font-family: "IBM Plex Mono", monospace;
+}
+
+window.nira-main list > row {
+  color: #ECEDEE;
+}
+
+window.nira-main .dim {
+  color: #9BA1A8;
+  font-size: 12px;
+}
+
+/* ---- shared buttons ---- */
+
+window.nira-main button.icon-btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: #C9CED4;
+}
+window.nira-main menubutton.icon-btn > button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: #C9CED4;
+}
+window.nira-main menubutton.icon-btn > button:hover,
+window.nira-main button.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+window.nira-main button.icon-btn:checked {
+  background: #2D3B55;
+  color: #FFFFFF;
+}
+window.nira-main button.icon-btn.bookmarked {
+  color: #F2B45A;
+}
+
+window.nira-main button.raised,
+window.nira-main dropdown.raised > button,
+window.nira-main menubutton.raised > button {
+  min-height: 42px;
+  padding: 0 14px 0 12px;
+  border: 1px solid #33373D;
+  border-radius: 10px;
+  background: #23262B;
+  box-shadow: none;
+  color: #ECEDEE;
+}
+window.nira-main button.raised:hover,
+window.nira-main dropdown.raised > button:hover,
+window.nira-main menubutton.raised > button:hover {
+  background: #2A2E34;
+}
+
+window.nira-main button.accent {
+  min-height: 44px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 10px;
+  background: #4C8DFF;
+  box-shadow: none;
+  color: #FFFFFF;
+  font-weight: 500;
+}
+window.nira-main button.accent:hover {
+  background: #6A9FFF;
+}
+window.nira-main button.accent .kbd {
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+window.nira-main button.link {
+  min-height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  color: #8DB6FF;
+}
+window.nira-main button.link:hover {
+  color: #B5CFFF;
+}
+window.nira-main button.link label {
+  text-decoration-line: none;
+}
+
+window.nira-main .kbd {
+  font-size: 11px;
+  padding: 0 5px;
+  border: 1px solid #3A3E45;
+  border-radius: 4px;
+  color: #C9CED4;
+}
+
+window.nira-main .vsep {
+  min-width: 1px;
+  min-height: 28px;
+  background: #33373D;
+}
+
+/* ---- title bar ---- */
+
+window.nira-main headerbar.titlebar {
+  min-height: 40px;
+  padding: 0 0 0 14px;
+  background: #111214;
+  border-bottom: 1px solid #24272C;
+  box-shadow: none;
+  color: #C9CED4;
+}
+window.nira-main headerbar.titlebar windowcontrols > button {
+  min-width: 46px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #9BA1A8;
+}
+window.nira-main headerbar.titlebar windowcontrols > button > image {
+  background: transparent;
+  box-shadow: none;
+}
+window.nira-main headerbar.titlebar windowcontrols > button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+window.nira-main .app-mark {
+  min-width: 18px;
+  min-height: 18px;
+  border-radius: 5px;
+  background: #4C8DFF;
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+}
+window.nira-main .app-mark:hover {
+  background: #6A9FFF;
+}
+window.nira-main .window-title .app-name {
+  color: #8A9098;
+}
+
+/* ---- toolbar ---- */
+
+window.nira-main .toolbar {
+  min-height: 44px;
+  padding: 8px 12px;
+  background: #1A1C1F;
+  border-bottom: 1px solid #26292E;
+}
+
+window.nira-main .book-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+window.nira-main .book-sub {
+  color: #9BA1A8;
+  font-size: 12px;
+}
+
+window.nira-main .segmented {
+  padding: 3px;
+  border: 1px solid #2A2D33;
+  border-radius: 11px;
+  background: #111214;
+}
+window.nira-main .segmented > button {
+  min-height: 38px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: #B4BAC1;
+}
+window.nira-main .segmented > button:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+window.nira-main .segmented > button:checked {
+  background: #2D3B55;
+  color: #FFFFFF;
+}
+
+window.nira-main .zoom-pill {
+  border: 1px solid #33373D;
+  border-radius: 10px;
+  background: #23262B;
+}
+window.nira-main .zoom-pill > button {
+  min-width: 40px;
+  min-height: 42px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+  color: #C9CED4;
+}
+window.nira-main .zoom-pill > button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+window.nira-main .zoom-pill > label {
+  min-width: 44px;
+  font-size: 12px;
+  color: #C9CED4;
+}
+
+/* ---- sidebar ---- */
+
+window.nira-main .sidebar {
+  background: #1A1C1F;
+  border-right: 1px solid #26292E;
+}
+window.nira-main .sidebar-tabs {
+  padding: 10px 12px 0 12px;
+  border-bottom: 1px solid #26292E;
+}
+window.nira-main .sidebar-tabs > button {
+  min-height: 40px;
+  padding: 0 10px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #9BA1A8;
+}
+window.nira-main .sidebar-tabs > button:checked {
+  border-bottom-color: #4C8DFF;
+  color: #ECEDEE;
+  font-weight: 500;
+}
+window.nira-main .sidebar-footer {
+  padding: 10px 14px;
+  border-top: 1px solid #26292E;
+  color: #9BA1A8;
+  font-size: 12px;
+}
+
+window.nira-main flowbox.thumbview {
+  padding: 14px 12px;
+}
+window.nira-main flowbox.thumbview > flowboxchild {
+  padding: 4px;
+  border: 2px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+}
+window.nira-main flowbox.thumbview > flowboxchild:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+window.nira-main flowbox.thumbview > flowboxchild:selected {
+  border-color: #4C8DFF;
+  background: #22293A;
+}
+window.nira-main .thumb-paper {
+  background: #E9E8E3;
+  border-radius: 2px;
+}
+window.nira-main .page-num {
+  font-size: 11px;
+  color: #9BA1A8;
+}
+window.nira-main flowboxchild:selected .page-num {
+  color: #FFFFFF;
+}
+window.nira-main .ribbon {
+  color: #F2B45A;
+}
+
+window.nira-main list.bookmark-list {
+  background: transparent;
+  padding: 8px;
+}
+window.nira-main list.bookmark-list > row {
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+window.nira-main list.bookmark-list > row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* ---- reading area ---- */
+
+window.nira-main scrolledwindow.viewer {
+  background: #0E0F11;
+}
+
+/* One shadow under the whole spread (on the pictures, the second page
+ * would shade the first). */
+window.nira-main box.spread {
+  box-shadow: 0 14px 44px rgba(0, 0, 0, 0.6);
+}
+
+window.nira-main button.click-zone {
+  min-width: 72px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #6E747B;
+}
+window.nira-main button.click-zone:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: #ECEDEE;
+}
+
+window.nira-main .pagebar {
+  padding: 6px 8px 6px 6px;
+  border: 1px solid #353940;
+  border-radius: 16px;
+  background: rgba(30, 32, 36, 0.94);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+window.nira-main .pagebar button.nav {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 11px;
+  background: #2A2D33;
+  box-shadow: none;
+  color: #ECEDEE;
+}
+window.nira-main .pagebar button.nav:hover {
+  background: #33373E;
+}
+window.nira-main .pagebar .count {
+  font-size: 13px;
+  min-width: 62px;
+}
+window.nira-main .pagebar .vsep {
+  min-height: 26px;
+  background: #3A3E45;
+}
+
+window.nira-main scale trough {
+  min-height: 4px;
+  border: none;
+  border-radius: 2px;
+  background: #3A3E45;
+}
+window.nira-main scale highlight {
+  border-radius: 2px;
+  background: #4C8DFF;
+}
+window.nira-main scale slider {
+  min-width: 16px;
+  min-height: 16px;
+  margin: -6px;
+  border: none;
+  border-radius: 50%;
+  background: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+window.nira-main .autohide {
+  transition: opacity 250ms ease-out;
+}
+window.nira-main .autohide.faded {
+  opacity: 0;
+}
+
+window.nira-main .osd {
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(10, 10, 11, 0.85);
+  color: #ECEDEE;
+  font-weight: 500;
+}
+
+window.nira-main .lens-label {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(10, 10, 11, 0.85);
+  color: #ECEDEE;
+  font-size: 12px;
+}
+window.nira-main .lens {
+  border: 3px solid #FFFFFF;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* ---- view settings panel ---- */
+
+window.nira-main .view-panel {
+  background: #1A1C1F;
+  border-left: 1px solid #26292E;
+}
+window.nira-main .view-panel-body {
+  padding: 18px 20px;
+}
+window.nira-main .panel-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+window.nira-main .section-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+  color: #9BA1A8;
+}
+window.nira-main .panel-footer {
+  padding-top: 8px;
+  border-top: 1px solid #26292E;
+}
+
+window.nira-main switch {
+  border: none;
+  background: #3A3E45;
+}
+window.nira-main switch:checked {
+  background: #4C8DFF;
+}
+window.nira-main switch > slider {
+  background: #FFFFFF;
+}
+
+window.nira-main button.bg-swatch {
+  min-height: 64px;
+  padding: 4px;
+  border: 2px solid #33373D;
+  border-radius: 10px;
+  background: #1A1C1F;
+  box-shadow: none;
+  color: #C9CED4;
+  font-size: 11px;
+}
+window.nira-main button.bg-swatch:checked {
+  border-color: #4C8DFF;
+  color: #ECEDEE;
+}
+window.nira-main .swatch-fill {
+  min-height: 36px;
+  border-radius: 6px;
+}
+window.nira-main .swatch-black { background: #0E0F11; }
+window.nira-main .swatch-grey { background: #3A3D42; }
+window.nira-main .swatch-paper { background: #EDEBE4; }
+window.nira-main .swatch-auto {
+  background: #8A8D92;
+  border: 1px dashed #C9CED4;
+}
+
+window.nira-main dropdown.small > button {
+  min-height: 34px;
+  padding: 0 8px 0 12px;
+  border: 1px solid #33373D;
+  border-radius: 8px;
+  background: #23262B;
+  box-shadow: none;
+  color: #ECEDEE;
+}
+
+/* ---- status bar ---- */
+
+window.nira-main .statusbar {
+  min-height: 32px;
+  padding: 0 14px;
+  background: #111214;
+  border-top: 1px solid #24272C;
+  color: #9BA1A8;
+  font-size: 12px;
+}
+
+/* ---- focus mode ---- */
+
+window.nira-main .focus-hint {
+  padding: 8px 8px 8px 16px;
+  border: 1px solid #353940;
+  border-radius: 999px;
+  background: rgba(30, 32, 36, 0.92);
+  color: #C9CED4;
+}
+window.nira-main .focus-hint button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: #2A2D33;
+  box-shadow: none;
+  color: #ECEDEE;
+  font-size: 12px;
+}
+window.nira-main .focus-hint .kbd {
+  border-color: #4A4F57;
+}
+window.nira-main .focus-label {
+  font-size: 12px;
+  color: #8A9098;
+}
+window.nira-main progressbar.thin > trough {
+  min-height: 3px;
+  border: none;
+  border-radius: 0;
+  background: #1E2024;
+}
+window.nira-main progressbar.thin > trough > progress {
+  min-height: 3px;
+  border-radius: 0;
+  background: #4C8DFF;
+}
+
+/* ---- start screen ---- */
+
+window.nira-main .welcome {
+  padding: 56px 72px 40px 72px;
+}
+window.nira-main .welcome-title {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+window.nira-main .welcome-sub {
+  color: #9BA1A8;
+  font-size: 14px;
+}
+window.nira-main .dropzone {
+  padding: 32px;
+  /* The design's border is dashed; GTK draws dashed borders through a
+   * cairo fallback that misplaces them on rounded boxes, so it is solid. */
+  border: 2px solid #3A3E45;
+  border-radius: 20px;
+  background: #1A1C1F;
+}
+window.nira-main .dropzone:drop(active),
+window.nira-main:drop(active) .dropzone {
+  border-color: #4C8DFF;
+  background: #1E2533;
+}
+window.nira-main .drop-icon {
+  min-width: 72px;
+  min-height: 72px;
+  border-radius: 20px;
+  background: #22293A;
+  color: #4C8DFF;
+}
+window.nira-main .drop-title {
+  font-size: 18px;
+  font-weight: 500;
+}
+window.nira-main .chip {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #23262B;
+  color: #C9CED4;
+  font-size: 11px;
+}
+window.nira-main .section-heading {
+  font-size: 15px;
+  font-weight: 600;
+}
+window.nira-main list.recent-list {
+  background: transparent;
+}
+window.nira-main list.recent-list > row {
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid #26292E;
+  border-radius: 12px;
+  background: #1A1C1F;
+}
+window.nira-main list.recent-list > row:hover {
+  background: #202227;
+}
+window.nira-main .cover {
+  background: #E9E8E3;
+}
+window.nira-main .recent-name {
+  font-weight: 500;
+}
+window.nira-main .recent-progress {
+  color: #C9CED4;
+  font-size: 12px;
+}
+window.nira-main progressbar.bar > trough {
+  min-height: 4px;
+  border: none;
+  border-radius: 2px;
+  background: #2E3137;
+}
+window.nira-main progressbar.bar > trough > progress {
+  min-height: 4px;
+  border-radius: 2px;
+  background: #4C8DFF;
+}
+
+/* ---- popovers (☰ menu, fit-mode list) ---- */
+
+window.nira-main popover > contents {
+  padding: 6px;
+  border: 1px solid #33373D;
+  border-radius: 12px;
+  background: #1E2024;
+  color: #ECEDEE;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+window.nira-main popover > arrow {
+  border: 1px solid #33373D;
+  background: #1E2024;
+}
+window.nira-main popover modelbutton,
+window.nira-main popover listview > row {
+  min-height: 34px;
+  border-radius: 8px;
+  color: #ECEDEE;
+}
+window.nira-main popover modelbutton:hover,
+window.nira-main popover modelbutton:focus,
+window.nira-main popover modelbutton:selected,
+window.nira-main popover listview > row:hover,
+window.nira-main popover listview > row:selected {
+  background: #2D3B55;
+}
+window.nira-main popover modelbutton:focus label,
+window.nira-main popover modelbutton:selected label {
+  color: #FFFFFF;
+}
+window.nira-main popover separator {
+  background: #33373D;
+}

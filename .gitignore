@@ -1,0 +1,15 @@
+/target/
+/dist/
+/.playwright-mcp/
+
+# Arch package build artifacts
+/packaging/arch/*.pkg.tar.zst
+/packaging/arch/*.pkg.tar.zst.sig
+/packaging/arch/*-package.log
+/packaging/arch/*.tar.gz
+/packaging/arch/src/
+/packaging/arch/pkg/
+
+*.swp
+*~
+.DS_Store
