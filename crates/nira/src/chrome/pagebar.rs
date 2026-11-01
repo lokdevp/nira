@@ -95,7 +95,7 @@ impl PageBar {
         self.scale.set_sensitive(total > 1);
         self.scale.set_inverted(manga);
         self.count.set_markup(&format!(
-            "{page} <span foreground=\"#8A9098\">/ {total}</span>"
+            "{page} <span alpha=\"60%\">/ {total}</span>"
         ));
         let (left, right) = if manga {
             (t("action-next-page"), t("action-previous-page"))

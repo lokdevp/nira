@@ -66,8 +66,9 @@ impl Default for View {
 #[serde(rename_all = "kebab-case")]
 pub enum Theme {
     /// Follow the desktop's light/dark preference.
-    #[default]
     System,
+    /// The design's dark palette.
+    #[default]
     Dark,
     Light,
 }
@@ -92,7 +93,7 @@ pub struct Appearance {
 impl Default for Appearance {
     fn default() -> Self {
         Appearance {
-            theme: Theme::System,
+            theme: Theme::Dark,
             background: [0x0E, 0x0F, 0x11],
             match_page_color: false,
             show_thumbnails: true,
@@ -278,7 +279,7 @@ mod tests {
         let mut s = Settings::default();
         s.view.fit = FitMode::Width;
         s.view.fit_size.axis = FitSizeAxis::Both;
-        s.appearance.theme = Theme::Dark;
+        s.appearance.theme = Theme::Light;
         assert_eq!(Settings::from_toml(&s.to_toml()).unwrap(), s);
     }
 
