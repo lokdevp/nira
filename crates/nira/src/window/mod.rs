@@ -454,14 +454,12 @@ impl NiraWindow {
         dialog.show(Some(self));
     }
 
-    /// Refresh everything that shows the book and position: title bar,
+    /// Refresh everything that shows the book and position: window title,
     /// toolbar, status bar, and which screen is shown.
     pub(super) fn update_chrome(&self) {
-        let (name, file, page, total, spread, fit, status, manga) = self.with_reader(|r| {
+        let (name, page, total, spread, fit, status, manga) = self.with_reader(|r| {
             let book = r.book();
             let name = book.map(|b| book_title(&b.path)).unwrap_or_default();
-            let file =
-                book.and_then(|b| b.path.file_name().map(|f| f.to_string_lossy().into_owned()));
             let spread = r.spread();
             let first = spread.first().copied();
             let status = PageStatus {
@@ -474,7 +472,6 @@ impl NiraWindow {
             };
             (
                 name,
-                file,
                 r.page(),
                 r.page_count(),
                 spread,
@@ -532,9 +529,6 @@ impl NiraWindow {
         if let Some(statusbar) = imp.statusbar.get() {
             statusbar.root.set_visible(reading && !focus);
             statusbar.update(&status);
-        }
-        if let Some(titlebar) = imp.titlebar.get() {
-            titlebar.update(file.as_deref());
         }
         self.set_title(Some(if name.is_empty() { "Nira" } else { &name }));
     }

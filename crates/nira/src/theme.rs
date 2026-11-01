@@ -5,6 +5,34 @@ use std::cell::OnceCell;
 use gtk::gdk;
 use nira_core::settings::{Settings, Theme};
 
+/// The app icon, for runs where it isn't installed in the icon theme
+/// (`cargo run`, the Windows zip, a copied binary).
+const ICON_PNG: &[u8] = include_bytes!("../../../packaging/linux/icons/256x256/apps/nira.png");
+
+/// Make the icon named `nira` resolve even when no package installed it:
+/// write the embedded PNG to the cache and add that folder to the icon
+/// theme's search path. Without this the title bar shows a missing-image
+/// icon where the window icon goes.
+pub fn ensure_app_icon() {
+    let Some(display) = gdk::Display::default() else {
+        return;
+    };
+    let theme = gtk::IconTheme::for_display(&display);
+    if theme.has_icon("nira") {
+        return;
+    }
+    let dir = nira_core::paths::cache_dir().join("icons");
+    let path = dir.join("nira.png");
+    if std::fs::read(&path).ok().as_deref() != Some(ICON_PNG) {
+        if let Err(e) = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&path, ICON_PNG))
+        {
+            log::debug!("cannot write the app icon to {}: {e}", path.display());
+            return;
+        }
+    }
+    theme.add_search_path(&dir);
+}
+
 /// Install `style.css` for the whole display (once).
 pub fn load_css() {
     let provider = gtk::CssProvider::new();

@@ -165,7 +165,7 @@ window.nira-main .app-mark {
 window.nira-main .app-mark:hover {
   background: #6A9FFF;
 }
-window.nira-main .window-title .app-name {
+window.nira-main .titlebar .app-name {
   color: #8A9098;
 }
 

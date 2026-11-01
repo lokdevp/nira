@@ -1,5 +1,6 @@
-//! The title bar: the app mark (which opens the About dialog), the open
-//! file's name and the window buttons.
+//! The title bar: the app mark (which opens the About dialog), the app's
+//! name and the window buttons. The book's title is in the toolbar, so it
+//! isn't repeated here.
 
 use gtk::prelude::*;
 
@@ -9,8 +10,6 @@ use super::label;
 
 pub struct TitleBar {
     pub root: gtk::HeaderBar,
-    file: gtk::Label,
-    separator: gtk::Label,
 }
 
 impl TitleBar {
@@ -25,27 +24,8 @@ impl TitleBar {
         mark.set_valign(gtk::Align::Center);
         root.pack_start(&mark);
 
-        let title = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        title.add_css_class("window-title");
-        let file = gtk::Label::new(None);
-        file.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
-        let separator = label(" — ", &["app-name"]);
-        let app = label("Nira", &["app-name"]);
-        title.append(&file);
-        title.append(&separator);
-        title.append(&app);
+        let title = label("Nira", &["app-name"]);
         root.set_title_widget(Some(&title));
-        TitleBar {
-            root,
-            file,
-            separator,
-        }
-    }
-
-    /// `file`: the open book's file name, if any.
-    pub fn update(&self, file: Option<&str>) {
-        self.file.set_text(file.unwrap_or(""));
-        self.file.set_visible(file.is_some());
-        self.separator.set_visible(file.is_some());
+        TitleBar { root }
     }
 }

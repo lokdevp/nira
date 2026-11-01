@@ -109,7 +109,9 @@ fn activate(app: &gtk::Application, args: &Args) {
     }
     let fullscreen = args.fullscreen || settings.view.fullscreen;
 
-    // The icon installed as packaging/linux/icons/*/apps/nira.png.
+    // The icon installed as packaging/linux/icons/*/apps/nira.png, or the
+    // embedded copy when it isn't installed.
+    theme::ensure_app_icon();
     gtk::Window::set_default_icon_name("nira");
     theme::load_css();
     theme::apply_theme(settings.appearance.theme);
