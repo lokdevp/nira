@@ -1,10 +1,11 @@
 //! The toolbar: Open and the page sidebar on the left; the book's title and
 //! progress between the previous/next book buttons in the middle; layout,
-//! direction, fit, zoom, bookmark, View panel and focus mode on the right.
+//! direction, fit, zoom, the lens, bookmark, View panel and focus mode on
+//! the right.
 
 use gtk::gio;
 use gtk::prelude::*;
-use nira_core::i18n::t;
+use nira_core::i18n::{t, t_args};
 use nira_core::zoom::FitMode;
 
 use super::{icon_button, icon_toggle, label, segmented, vsep};
@@ -21,6 +22,7 @@ pub struct Toolbar {
     fit: gtk::MenuButton,
     zoom_pill: gtk::Box,
     zoom: gtk::Label,
+    lens: gtk::ToggleButton,
 }
 
 /// What the toolbar shows.
@@ -78,7 +80,7 @@ impl Toolbar {
         center.append(&titles);
         center.append(&next);
 
-        // Right: layout, direction, fit, zoom | bookmark, panel, focus.
+        // Right: layout, direction, fit, zoom, lens | bookmark, panel, focus.
         let end = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         let layout = segmented(
             "win.page-layout",
@@ -126,7 +128,10 @@ impl Toolbar {
         end.append(&layout);
         end.append(&direction);
         end.append(&fit);
+        let lens = icon_toggle("edit-find-symbolic", &t("action-lens"), "win.lens");
+
         end.append(&zoom_pill);
+        end.append(&lens);
         end.append(&vsep());
         end.append(&icon_toggle(
             "bookmark-new-symbolic",
@@ -162,6 +167,7 @@ impl Toolbar {
             fit,
             zoom_pill,
             zoom,
+            lens,
         }
     }
 
@@ -171,6 +177,15 @@ impl Toolbar {
         self.subtitle.set_visible(!state.progress.is_empty());
         self.zoom.set_text(state.zoom);
         self.fit.set_label(&t(&format!("fit-{}", state.fit.name())));
+    }
+
+    /// The lens button's tooltip, with its key from the keymap if bound.
+    pub fn set_lens_key(&self, key: Option<&str>) {
+        let tip = match key {
+            Some(key) => t_args("toolbar-lens", &[("key", key.into())]),
+            None => t("action-lens"),
+        };
+        self.lens.set_tooltip_text(Some(&tip));
     }
 
     /// Hide groups as the window narrows (0 = everything shown). Order:

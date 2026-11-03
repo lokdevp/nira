@@ -7,7 +7,7 @@ use gtk::prelude::*;
 use nira_core::i18n::t;
 use nira_core::settings::Settings;
 
-use super::{kbd, label};
+use super::label;
 
 /// Background presets: (action target, swatch CSS class, colour). `auto`
 /// follows the shown page's border colour.
@@ -47,7 +47,6 @@ pub struct ViewPanel {
     pub brightness: gtk::Scale,
     pub contrast: gtk::Scale,
     brightness_value: gtk::Label,
-    lens_key: gtk::Label,
     contrast_value: gtk::Label,
     slideshow: gtk::MenuButton,
 }
@@ -164,17 +163,6 @@ impl ViewPanel {
 
         // Reading.
         let (reading, rows) = section(&t("panel-reading"));
-        let lens_title = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        lens_title.append(&gtk::Label::new(Some(&t("panel-lens"))));
-        let lens_key = kbd("L");
-        lens_title.append(&lens_key);
-        let lens_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-        lens_title.set_hexpand(true);
-        lens_row.append(&lens_title);
-        let lens_switch = switch("win.lens");
-        lens_switch.set_valign(gtk::Align::Center);
-        lens_row.append(&lens_switch);
-        rows.append(&lens_row);
         rows.append(&row(
             &t("panel-cover-alone"),
             None,
@@ -243,15 +231,9 @@ impl ViewPanel {
             brightness,
             contrast,
             brightness_value,
-            lens_key,
             contrast_value,
             slideshow,
         }
-    }
-
-    /// The lens keycap, from the keymap.
-    pub fn set_lens_key(&self, key: &str) {
-        self.lens_key.set_text(key);
     }
 
     /// Show the settings' values on the sliders and the interval button.

@@ -211,8 +211,8 @@ impl NiraWindow {
             .accels(Action::Lens)
             .first()
             .and_then(|a| crate::chrome::accel_label(a));
-        if let (Some(panel), Some(key)) = (self.imp().viewpanel.get(), lens) {
-            panel.set_lens_key(&key.to_uppercase());
+        if let Some(toolbar) = self.imp().toolbar.get() {
+            toolbar.set_lens_key(lens.map(|k| k.to_uppercase()).as_deref());
         }
     }
 }

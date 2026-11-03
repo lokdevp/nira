@@ -85,6 +85,7 @@ toolbar-next-book = Next file in folder
 toolbar-progress = Page { $pages } of { $total } · { $percent }% read
 toolbar-fit = Fit mode
 toolbar-bookmark = Bookmark this page
+toolbar-lens = Magnifying lens ({ $key })
 toolbar-view-settings = View settings
 toolbar-focus = Focus mode (full screen)
 layout-single = Single
@@ -113,7 +114,7 @@ background-paper = Paper
 background-auto = Auto
 panel-reading = Reading
 panel-cover-alone = First page alone in spreads
-panel-auto-hide = Hide controls while reading
+panel-auto-hide = Fade the page bar while reading
 panel-page-bar = Show the page bar
 panel-focus-progress = Progress line in focus mode
 panel-slideshow = Slideshow every
@@ -157,7 +158,6 @@ open-folder-dialog-title = Open a folder of images
 
 ## Lens
 
-panel-lens = Magnifier lens
 # $zoom: "2.5"
 lens-label = Lens { $zoom }× · scroll to change
 
