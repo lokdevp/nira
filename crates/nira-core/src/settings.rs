@@ -83,6 +83,10 @@ pub struct Appearance {
     pub show_view_panel: bool,
     /// Fade the page bar and click zones out while reading.
     pub auto_hide_controls: bool,
+    /// Show the floating page bar outside focus mode.
+    pub show_page_bar: bool,
+    /// Show the progress line along the bottom edge in focus mode.
+    pub show_focus_progress: bool,
     /// UI language (`"auto"` follows the system locale).
     pub language: String,
 }
@@ -97,6 +101,8 @@ impl Default for Appearance {
             thumbnail_page_numbers: true,
             show_view_panel: false,
             auto_hide_controls: true,
+            show_page_bar: true,
+            show_focus_progress: true,
             language: "auto".to_string(),
         }
     }

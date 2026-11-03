@@ -185,6 +185,12 @@ impl ViewPanel {
             None,
             &switch("win.auto-hide-controls"),
         ));
+        rows.append(&row(&t("panel-page-bar"), None, &switch("win.page-bar")));
+        rows.append(&row(
+            &t("panel-focus-progress"),
+            None,
+            &switch("win.focus-progress"),
+        ));
         let menu = gio::Menu::new();
         for secs in SLIDESHOW_SECONDS {
             let item = gio::MenuItem::new(Some(&format!("{secs} s")), None);

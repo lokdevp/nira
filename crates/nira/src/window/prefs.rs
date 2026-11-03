@@ -154,6 +154,12 @@ impl NiraWindow {
         });
         theme::apply_theme(&s.appearance.theme);
         self.set_action_state("cover-alone", s.view.cover_alone.to_variant());
+        self.set_action_state("page-bar", s.appearance.show_page_bar.to_variant());
+        self.set_action_state(
+            "focus-progress",
+            s.appearance.show_focus_progress.to_variant(),
+        );
+        self.apply_progress_visibility();
         if fit_changed {
             self.set_fit(s.view.fit);
         } else {
@@ -307,6 +313,20 @@ impl NiraWindow {
             None,
             |s| s.appearance.thumbnail_page_numbers,
             |s, v| s.appearance.thumbnail_page_numbers = v,
+        );
+        self.pref_switch(
+            &p,
+            &t("panel-page-bar"),
+            None,
+            |s| s.appearance.show_page_bar,
+            |s, v| s.appearance.show_page_bar = v,
+        );
+        self.pref_switch(
+            &p,
+            &t("panel-focus-progress"),
+            None,
+            |s| s.appearance.show_focus_progress,
+            |s, v| s.appearance.show_focus_progress = v,
         );
         tab(&p, &t("prefs-tab-reading"));
 

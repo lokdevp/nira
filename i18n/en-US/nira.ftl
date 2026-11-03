@@ -114,6 +114,8 @@ background-auto = Auto
 panel-reading = Reading
 panel-cover-alone = First page alone in spreads
 panel-auto-hide = Hide controls while reading
+panel-page-bar = Show the page bar
+panel-focus-progress = Progress line in focus mode
 panel-slideshow = Slideshow every
 panel-reset = Reset to defaults
 

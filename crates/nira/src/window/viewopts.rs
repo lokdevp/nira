@@ -90,6 +90,18 @@ impl NiraWindow {
                     w.wake_controls();
                 },
             ),
+            named_toggle("page-bar", s.appearance.show_page_bar, |w, on| {
+                w.update_settings(|s| s.appearance.show_page_bar = on);
+                w.apply_progress_visibility();
+            }),
+            named_toggle(
+                "focus-progress",
+                s.appearance.show_focus_progress,
+                |w, on| {
+                    w.update_settings(|s| s.appearance.show_focus_progress = on);
+                    w.apply_progress_visibility();
+                },
+            ),
             radio(
                 "slideshow-delay",
                 &(s.slideshow.delay_ms / 1000).to_string(),
@@ -107,6 +119,7 @@ impl NiraWindow {
                 .build(),
         ]);
         self.show_view_panel(s.appearance.show_view_panel);
+        self.apply_progress_visibility();
         self.sync_view_panel();
     }
 
@@ -218,6 +231,8 @@ impl NiraWindow {
             s.appearance.background = d.appearance.background;
             s.appearance.match_page_color = d.appearance.match_page_color;
             s.appearance.auto_hide_controls = d.appearance.auto_hide_controls;
+            s.appearance.show_page_bar = d.appearance.show_page_bar;
+            s.appearance.show_focus_progress = d.appearance.show_focus_progress;
             s.view.cover_alone = d.view.cover_alone;
             s.slideshow.delay_ms = d.slideshow.delay_ms;
         });
@@ -232,10 +247,16 @@ impl NiraWindow {
             "auto-hide-controls",
             s.appearance.auto_hide_controls.to_variant(),
         );
+        self.set_action_state("page-bar", s.appearance.show_page_bar.to_variant());
+        self.set_action_state(
+            "focus-progress",
+            s.appearance.show_focus_progress.to_variant(),
+        );
         self.set_action_state(
             "slideshow-delay",
             (s.slideshow.delay_ms / 1000).to_string().to_variant(),
         );
+        self.apply_progress_visibility();
         self.sync_view_panel();
         self.update_background();
         self.with_reader(|r| {

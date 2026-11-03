@@ -52,13 +52,14 @@ impl FocusOverlay {
             progress,
         };
         overlay.set_visible(false);
+        overlay.progress.set_visible(false);
         overlay
     }
 
+    /// The hint and label; the progress line has its own setting.
     pub fn set_visible(&self, on: bool) {
         self.hint.set_visible(on);
         self.label.set_visible(on);
-        self.progress.set_visible(on);
     }
 
     /// `text` like "38–37 / 41 · R→L"; `fraction` read so far. Manga

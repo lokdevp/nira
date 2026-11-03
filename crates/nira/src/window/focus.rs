@@ -82,12 +82,7 @@ impl NiraWindow {
                 .root
                 .set_visible(!on && settings.appearance.show_view_panel);
         }
-        if let Some(bar) = imp.pagebar.get() {
-            bar.root.set_visible(!on);
-            for zone in &bar.zones {
-                zone.set_visible(!on);
-            }
-        }
+        self.apply_progress_visibility();
         self.float_toolbar(on);
         if let Some(focus) = imp.focus_overlay.get() {
             focus.set_visible(on);
@@ -160,6 +155,25 @@ impl NiraWindow {
             toolbar.root.set_visible(true);
         } else if shown && y > toolbar.root.height() as f64 + 24.0 {
             toolbar.root.set_visible(false);
+        }
+    }
+
+    /// Show or hide the page bar and click zones (outside focus mode) and
+    /// the progress line (in focus mode), after the settings.
+    pub(super) fn apply_progress_visibility(&self) {
+        let imp = self.imp();
+        let on = imp.focus.get();
+        let appearance = self.imp_settings().appearance.clone();
+        if let Some(bar) = imp.pagebar.get() {
+            bar.root.set_visible(!on && appearance.show_page_bar);
+            for zone in &bar.zones {
+                zone.set_visible(!on);
+            }
+        }
+        if let Some(focus) = imp.focus_overlay.get() {
+            focus
+                .progress
+                .set_visible(on && appearance.show_focus_progress);
         }
     }
 
