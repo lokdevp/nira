@@ -186,6 +186,8 @@ impl Toolbar {
             None => t("action-lens"),
         };
         self.lens.set_tooltip_text(Some(&tip));
+        self.lens
+            .update_property(&[gtk::accessible::Property::Label(&tip)]);
     }
 
     /// Hide groups as the window narrows (0 = everything shown). Order:

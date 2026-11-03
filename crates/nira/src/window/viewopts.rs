@@ -63,7 +63,10 @@ impl NiraWindow {
         self.add_action_entries([
             named_toggle("view-panel", s.appearance.show_view_panel, |w, on| {
                 w.show_view_panel(on);
-                w.update_settings(|s| s.appearance.show_view_panel = on);
+                // Focus mode has its own panel state; only normal mode saves.
+                if !w.imp().focus.get() {
+                    w.update_settings(|s| s.appearance.show_view_panel = on);
+                }
             }),
             named_toggle("auto-enhance", s.enhance.auto_enhance, |w, on| {
                 w.update_settings(|s| s.enhance.auto_enhance = on);
@@ -123,7 +126,7 @@ impl NiraWindow {
         self.sync_view_panel();
     }
 
-    fn show_view_panel(&self, on: bool) {
+    pub(super) fn show_view_panel(&self, on: bool) {
         if let Some(panel) = self.imp().viewpanel.get() {
             panel.root.set_visible(on);
         }

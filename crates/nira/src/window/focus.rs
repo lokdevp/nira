@@ -72,16 +72,19 @@ impl NiraWindow {
     fn apply_focus(&self, on: bool) {
         let imp = self.imp();
         imp.focus.set(on);
-        let settings = self.imp_settings().clone();
-        if let Some(side) = imp.sidebar.get() {
-            side.root
-                .set_visible(!on && settings.appearance.show_thumbnails);
-        }
-        if let Some(panel) = imp.viewpanel.get() {
-            panel
-                .root
-                .set_visible(!on && settings.appearance.show_view_panel);
-        }
+        // Focus mode starts with both panels hidden; leaving it restores
+        // the normal-mode choice. The toggles follow what is shown.
+        let (sidebar, panel) = {
+            let s = self.imp_settings();
+            (
+                !on && s.appearance.show_thumbnails,
+                !on && s.appearance.show_view_panel,
+            )
+        };
+        self.set_sidebar_visible(sidebar);
+        self.show_view_panel(panel);
+        self.set_action_state("thumbnails", sidebar.to_variant());
+        self.set_action_state("view-panel", panel.to_variant());
         self.apply_progress_visibility();
         self.float_toolbar(on);
         if let Some(focus) = imp.focus_overlay.get() {

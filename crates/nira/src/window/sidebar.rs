@@ -166,11 +166,19 @@ impl NiraWindow {
         self.set_action_state("bookmark", self.page_bookmarked().to_variant());
     }
 
+    /// The Pages toggle. Focus mode has its own sidebar state, so only
+    /// normal mode saves the choice.
     pub(super) fn show_sidebar(&self, on: bool) {
+        self.set_sidebar_visible(on);
+        if !self.imp().focus.get() {
+            self.update_settings(|s| s.appearance.show_thumbnails = on);
+        }
+    }
+
+    pub(super) fn set_sidebar_visible(&self, on: bool) {
         if let Some(side) = self.imp().sidebar.get() {
             side.root.set_visible(on);
         }
-        self.update_settings(|s| s.appearance.show_thumbnails = on);
         if on {
             self.imp().sidebar_page.set(None);
             let page = self.with_reader(|r| r.page());

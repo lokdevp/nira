@@ -20,6 +20,7 @@ pub fn icon_button(icon: &str, tooltip: &str, action: &str) -> gtk::Button {
     let b = gtk::Button::from_icon_name(icon);
     b.add_css_class("icon-btn");
     b.set_tooltip_text(Some(tooltip));
+    b.update_property(&[gtk::accessible::Property::Label(tooltip)]);
     b.set_focus_on_click(false);
     b.set_valign(gtk::Align::Center);
     b.set_action_name(Some(action));
@@ -32,6 +33,7 @@ pub fn icon_toggle(icon: &str, tooltip: &str, action: &str) -> gtk::ToggleButton
     b.set_icon_name(icon);
     b.add_css_class("icon-btn");
     b.set_tooltip_text(Some(tooltip));
+    b.update_property(&[gtk::accessible::Property::Label(tooltip)]);
     b.set_focus_on_click(false);
     b.set_valign(gtk::Align::Center);
     b.set_action_name(Some(action));
