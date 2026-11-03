@@ -81,6 +81,10 @@ pub struct Appearance {
     pub show_thumbnails: bool,
     pub thumbnail_page_numbers: bool,
     pub show_view_panel: bool,
+    /// The page sidebar in focus mode, remembered apart from normal mode.
+    pub focus_show_thumbnails: bool,
+    /// The View panel in focus mode, remembered apart from normal mode.
+    pub focus_show_view_panel: bool,
     /// Fade the page bar and click zones out while reading.
     pub auto_hide_controls: bool,
     /// Show the floating page bar outside focus mode.
@@ -89,6 +93,17 @@ pub struct Appearance {
     pub show_focus_progress: bool,
     /// UI language (`"auto"` follows the system locale).
     pub language: String,
+}
+
+impl Appearance {
+    /// (sidebar, View panel) shown in normal or focus mode.
+    pub fn panels(&self, focus: bool) -> (bool, bool) {
+        if focus {
+            (self.focus_show_thumbnails, self.focus_show_view_panel)
+        } else {
+            (self.show_thumbnails, self.show_view_panel)
+        }
+    }
 }
 
 impl Default for Appearance {
@@ -100,6 +115,8 @@ impl Default for Appearance {
             show_thumbnails: true,
             thumbnail_page_numbers: true,
             show_view_panel: false,
+            focus_show_thumbnails: false,
+            focus_show_view_panel: false,
             auto_hide_controls: true,
             show_page_bar: true,
             show_focus_progress: true,
@@ -302,6 +319,18 @@ mod tests {
         assert_eq!(s.window.width, 800);
         assert_eq!(s.window.height, 720);
         assert_eq!(s.lens, Lens::default());
+    }
+
+    #[test]
+    fn each_mode_has_its_own_panels() {
+        let mut a = Appearance::default();
+        assert_eq!(a.panels(true), (false, false), "focus starts without panels");
+        a.show_thumbnails = true;
+        a.show_view_panel = false;
+        a.focus_show_thumbnails = false;
+        a.focus_show_view_panel = true;
+        assert_eq!(a.panels(false), (true, false));
+        assert_eq!(a.panels(true), (false, true));
     }
 
     #[test]

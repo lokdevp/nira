@@ -63,8 +63,10 @@ impl NiraWindow {
         self.add_action_entries([
             named_toggle("view-panel", s.appearance.show_view_panel, |w, on| {
                 w.show_view_panel(on);
-                // Focus mode has its own panel state; only normal mode saves.
-                if !w.imp().focus.get() {
+                // Normal and focus mode each remember their own choice.
+                if w.imp().focus.get() {
+                    w.update_settings(|s| s.appearance.focus_show_view_panel = on);
+                } else {
                     w.update_settings(|s| s.appearance.show_view_panel = on);
                 }
             }),
