@@ -135,6 +135,8 @@ impl NiraWindow {
             simple(Action::ExitFullscreen, |w| w.leave_fullscreen()),
             simple(Action::Minimize, |w| w.minimize()),
         ]);
+        // The sidebar is built before the settings are loaded.
+        self.set_sidebar_visible(thumbs);
     }
 
     /// Bind the keymap's accelerators to the window's actions. Actions the

@@ -46,7 +46,6 @@ impl NiraWindow {
                 move |_| win.refresh_thumbnails()
             ));
         let root = side.root.clone();
-        root.set_visible(self.imp_settings().appearance.show_thumbnails);
         let _ = self.imp().sidebar.set(side);
         root
     }

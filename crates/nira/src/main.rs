@@ -99,14 +99,8 @@ fn main() -> glib::ExitCode {
 }
 
 fn activate(app: &gtk::Application, args: &Args) {
-    let mut settings = Settings::load();
+    let settings = Settings::load();
     nira_core::i18n::init(&settings.appearance.language);
-    // Command-line options apply to this run only; they are not saved.
-    settings.view.manga |= args.manga;
-    settings.view.double_page |= args.double_page;
-    if let Some(fit) = args.fit {
-        settings.view.fit = fit.into();
-    }
     let fullscreen = args.fullscreen || settings.view.fullscreen;
 
     // The icon installed as packaging/linux/icons/*/apps/nira.png, or the
@@ -117,6 +111,8 @@ fn activate(app: &gtk::Application, args: &Args) {
     theme::apply_theme(&settings.appearance.theme);
     let reopen = settings.files.reopen_last;
     let win = NiraWindow::new(app, settings);
+    // Command-line options apply to this run only; they are not saved.
+    win.apply_overrides(args.manga, args.double_page, args.fit.map(Into::into));
     if fullscreen {
         win.fullscreen();
     }

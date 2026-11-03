@@ -160,6 +160,13 @@ impl NiraWindow {
             s.appearance.show_focus_progress.to_variant(),
         );
         self.apply_progress_visibility();
+        // Spread and direction are the toolbar's current choice too.
+        if s.view.double_page != self.double_page() {
+            self.apply_double_page(s.view.double_page);
+        }
+        if s.view.manga != self.manga() {
+            self.apply_manga(s.view.manga);
+        }
         if fit_changed {
             self.set_fit(s.view.fit);
         } else {

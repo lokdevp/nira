@@ -174,10 +174,16 @@ impl NiraWindow {
         self.update_chrome();
     }
 
+    /// Pick a fit mode and save it.
     pub(super) fn set_fit(&self, mode: FitMode) {
+        self.apply_fit(mode);
+        self.update_settings(|s| s.view.fit = mode);
+    }
+
+    /// Show a fit mode without saving it.
+    fn apply_fit(&self, mode: FitMode) {
         self.set_action_state("fit", mode.name().to_variant());
         self.with_reader(|r| r.zoom.fit_mode = mode);
-        self.update_settings(|s| s.view.fit = mode);
         self.show_spread(Some(Place::Start));
     }
 
@@ -278,7 +284,33 @@ impl NiraWindow {
         self.with_reader(|r| r.view.manga)
     }
 
+    /// Pick Single or Spread and save it.
     pub(super) fn set_double_page(&self, on: bool) {
+        self.apply_double_page(on);
+        self.update_settings(|s| s.view.double_page = on);
+    }
+
+    /// Pick the reading direction and save it.
+    pub(super) fn set_manga(&self, on: bool) {
+        self.apply_manga(on);
+        self.update_settings(|s| s.view.manga = on);
+    }
+
+    /// Command-line options: this run only, never saved.
+    pub fn apply_overrides(&self, manga: bool, double_page: bool, fit: Option<FitMode>) {
+        if manga {
+            self.apply_manga(true);
+        }
+        if double_page {
+            self.apply_double_page(true);
+        }
+        if let Some(fit) = fit {
+            self.apply_fit(fit);
+        }
+    }
+
+    /// Show Single or Spread without saving it.
+    pub(super) fn apply_double_page(&self, on: bool) {
         let layout = if on { "spread" } else { "single" };
         self.set_action_state("page-layout", layout.to_variant());
         self.with_reader(|r| {
@@ -288,7 +320,8 @@ impl NiraWindow {
         self.show_spread(Some(Place::Start));
     }
 
-    pub(super) fn set_manga(&self, on: bool) {
+    /// Show a reading direction without saving it.
+    pub(super) fn apply_manga(&self, on: bool) {
         self.set_action_state("direction", if on { "rtl" } else { "ltr" }.to_variant());
         self.with_reader(|r| r.view.manga = on);
         self.show_spread(Some(Place::Start));
