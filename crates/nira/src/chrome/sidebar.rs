@@ -5,6 +5,7 @@
 use gtk::gdk;
 use gtk::prelude::*;
 use nira_core::i18n::{t, t_args};
+use nira_core::thumbs::reveal_value;
 
 use super::label;
 
@@ -201,12 +202,11 @@ impl Sidebar {
         self.grid.select_child(&cell.child);
         if cell.child.width() == 0 {
             // A freshly filled grid has no layout yet: scroll once it has.
-            let (scroll, grid, child) =
-                (self.scroll.clone(), self.grid.clone(), cell.child.clone());
-            gtk::glib::idle_add_local_once(move || scroll_to_child(&scroll, &grid, &child));
+            let (scroll, child) = (self.scroll.clone(), cell.child.clone());
+            gtk::glib::idle_add_local_once(move || scroll_to_child(&scroll, &child));
             return;
         }
-        scroll_to_child(&self.scroll, &self.grid, &cell.child);
+        scroll_to_child(&self.scroll, &cell.child);
     }
 
     /// Show ribbons on the bookmarked pages (0-based) and list them.
@@ -253,17 +253,17 @@ impl Sidebar {
     }
 }
 
-/// Scroll the grid just enough to show `child`.
-fn scroll_to_child(scroll: &gtk::ScrolledWindow, grid: &gtk::FlowBox, child: &gtk::FlowBoxChild) {
-    let Some(bounds) = child.compute_bounds(grid) else {
+/// Scroll the grid just enough to show `child` and the padding around it.
+/// Measured against `scroll`: the adjustment counts the grid's padding, and
+/// bounds taken in the grid's own coordinates don't.
+fn scroll_to_child(scroll: &gtk::ScrolledWindow, child: &gtk::FlowBoxChild) {
+    let Some(bounds) = child.compute_bounds(scroll) else {
         return;
     };
     let adj = scroll.vadjustment();
-    let (top, h) = (bounds.y() as f64, bounds.height() as f64);
-    let view = adj.page_size();
-    if top < adj.value() {
-        adj.set_value(top);
-    } else if top + h > adj.value() + view {
-        adj.set_value(top + h - view);
+    let top = adj.value() + bounds.y() as f64;
+    let height = bounds.height() as f64;
+    if let Some(value) = reveal_value(adj.value(), adj.page_size(), top, height, TOP) {
+        adj.set_value(value);
     }
 }
