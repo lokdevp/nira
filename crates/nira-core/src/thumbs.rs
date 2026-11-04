@@ -26,21 +26,6 @@ pub fn visible_cells(
     first..last
 }
 
-/// The scroll value that shows a cell `top` pixels down the grid and
-/// `height` tall, keeping `margin` pixels clear at both edges of the view,
-/// or `None` when it already shows. A cell that can't fit with its margins
-/// shows its top.
-pub fn reveal_value(value: f64, page_size: f64, top: f64, height: f64, margin: f64) -> Option<f64> {
-    let (start, end) = (top - margin, top + height + margin);
-    if start < value || end - start > page_size {
-        Some(start)
-    } else if end > value + page_size {
-        Some(end - page_size)
-    } else {
-        None
-    }
-}
-
 /// The wanted pages in priority order: the current page, then outward from
 /// it, then the rest of the visible ones.
 pub fn wanted_order(page: usize, n: usize, visible: Range<usize>) -> Vec<usize> {
@@ -82,23 +67,6 @@ mod tests {
         assert_eq!(r.start, 32);
         assert!(r.contains(&40) && r.contains(&45));
         assert_eq!(visible_cells(0.0, 1000.0, 100.0, 0.0, 2, 5), 0..5);
-    }
-
-    #[test]
-    fn reveal_moves_only_as_far_as_needed() {
-        // Fully in view, margins included.
-        assert_eq!(reveal_value(100.0, 500.0, 200.0, 150.0, 14.0), None);
-        // Above the view: its top lands one margin below the edge.
-        assert_eq!(reveal_value(300.0, 500.0, 200.0, 150.0, 14.0), Some(186.0));
-        // Below the view: its bottom lands one margin above the edge.
-        assert_eq!(reveal_value(0.0, 500.0, 400.0, 150.0, 14.0), Some(64.0));
-        // Its margin alone is enough to move the view.
-        assert_eq!(reveal_value(0.0, 500.0, 340.0, 150.0, 14.0), Some(4.0));
-    }
-
-    #[test]
-    fn reveal_shows_the_top_when_the_view_is_too_small() {
-        assert_eq!(reveal_value(0.0, 100.0, 400.0, 150.0, 14.0), Some(386.0));
     }
 
     #[test]

@@ -53,6 +53,23 @@ pub fn line_step(axis: Axis, delta: f64) -> Step {
     }
 }
 
+/// The scroll value that shows a cell `top` pixels down the content and
+/// `height` tall, keeping up to `margin` pixels clear at both edges of the
+/// view, or `None` when it already shows. The margin shrinks to what fits;
+/// a cell taller than the view shows its top.
+pub fn reveal_value(value: f64, page_size: f64, top: f64, height: f64, margin: f64) -> Option<f64> {
+    let margin = margin.min((page_size - height) / 2.0).max(0.0);
+    let (start, end) = (top - margin, top + height + margin);
+    let target = if start < value || height > page_size {
+        start
+    } else if end > value + page_size {
+        end - page_size
+    } else {
+        return None;
+    };
+    (target != value).then_some(target)
+}
+
 /// Counts presses against a page edge; the page turns after `needed` in a
 /// row in the same direction.
 #[derive(Debug, Clone, Copy, Default)]
@@ -156,6 +173,34 @@ mod tests {
             upper,
             page_size: page,
         }
+    }
+
+    #[test]
+    fn reveal_moves_only_as_far_as_needed() {
+        // Fully in view, margins included.
+        assert_eq!(reveal_value(100.0, 500.0, 200.0, 150.0, 14.0), None);
+        // Above the view: its top lands one margin below the edge.
+        assert_eq!(reveal_value(300.0, 500.0, 200.0, 150.0, 14.0), Some(186.0));
+        // Below the view: its bottom lands one margin above the edge.
+        assert_eq!(reveal_value(0.0, 500.0, 400.0, 150.0, 14.0), Some(64.0));
+        // Its margin alone is enough to move the view.
+        assert_eq!(reveal_value(0.0, 500.0, 340.0, 150.0, 14.0), Some(4.0));
+    }
+
+    #[test]
+    fn reveal_shrinks_the_margin_to_show_the_whole_cell() {
+        // 156 tall in a 160 view leaves 2 on each side.
+        assert_eq!(reveal_value(0.0, 160.0, 400.0, 156.0, 14.0), Some(398.0));
+        assert_eq!(reveal_value(500.0, 160.0, 400.0, 156.0, 14.0), Some(398.0));
+        assert_eq!(reveal_value(398.0, 160.0, 400.0, 156.0, 14.0), None);
+    }
+
+    #[test]
+    fn reveal_shows_the_top_when_the_view_is_too_small() {
+        assert_eq!(reveal_value(0.0, 100.0, 400.0, 150.0, 14.0), Some(400.0));
+        assert_eq!(reveal_value(450.0, 100.0, 400.0, 150.0, 14.0), Some(400.0));
+        // Already there.
+        assert_eq!(reveal_value(400.0, 100.0, 400.0, 150.0, 14.0), None);
     }
 
     #[test]
