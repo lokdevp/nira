@@ -20,6 +20,7 @@
 @define-color nira_accent #CBA6F7;
 @define-color nira_on_accent #1E1E2E;
 @define-color nira_accent_hover #D6BAF9;
+@define-color nira_progress @nira_accent;
 @define-color nira_link #89B4FA;
 @define-color nira_link_hover #B4BEFE;
 @define-color nira_selected #45475A;

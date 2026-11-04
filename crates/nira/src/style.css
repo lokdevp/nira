@@ -361,6 +361,9 @@ window.nira-main scale highlight {
   border-radius: 2px;
   background: @nira_accent;
 }
+window.nira-main .pagebar scale highlight {
+  background: @nira_progress;
+}
 window.nira-main scale slider {
   min-width: 16px;
   min-height: 16px;
@@ -516,7 +519,7 @@ window.nira-main progressbar.thin > trough {
 window.nira-main progressbar.thin > trough > progress {
   min-height: 3px;
   border-radius: 0;
-  background: @nira_accent;
+  background: @nira_progress;
 }
 
 /* ---- start screen ---- */
@@ -600,7 +603,7 @@ window.nira-main progressbar.bar > trough {
 window.nira-main progressbar.bar > trough > progress {
   min-height: 4px;
   border-radius: 2px;
-  background: @nira_accent;
+  background: @nira_progress;
 }
 
 /* ---- popovers (☰ menu, fit-mode list) ---- */
