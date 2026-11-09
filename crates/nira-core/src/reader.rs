@@ -646,6 +646,9 @@ mod tests {
                         WorkerResult::Decoded(decode_pages(ar.as_mut(), &cmd))
                     }
                     WorkerCmd::Rescale(cmd) => WorkerResult::Rescaled(rescale_pages(cmd)),
+                    WorkerCmd::UseArchive { .. } => {
+                        unreachable!("the reader never hands over archives")
+                    }
                 };
                 frames.extend(reader.on_result(res));
             }

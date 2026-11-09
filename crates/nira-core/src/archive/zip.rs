@@ -35,6 +35,18 @@ impl Archive for ZipArchive {
         &self.name
     }
 
+    fn try_clone(&self) -> Option<Box<dyn Archive>> {
+        // Its own file handle: two threads seeking one shared handle would
+        // read each other's data. Reading the central directory again is cheap.
+        let archive = zip::ZipArchive::new(File::open(&self.path).ok()?).ok()?;
+        Some(Box::new(ZipArchive {
+            path: self.path.clone(),
+            name: self.name.clone(),
+            archive,
+            pages: self.pages.clone(),
+        }))
+    }
+
     fn raw_names(&mut self) -> Result<Vec<String>, ArchiveError> {
         Ok(self
             .archive

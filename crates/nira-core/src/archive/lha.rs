@@ -8,6 +8,7 @@ use super::{find_first, run_capture, sorted_pages, which, Archive, ArchiveError}
 /// 7-Zip executables that can read LHA (`7zr` only handles .7z).
 const SEVENZ_LHA_BINARIES: &[&str] = &["7z", "7zz", "7za"];
 
+#[derive(Clone)]
 pub struct LhaArchive {
     path: PathBuf,
     name: String,
@@ -74,6 +75,11 @@ impl LhaArchive {
 impl Archive for LhaArchive {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn try_clone(&self) -> Option<Box<dyn Archive>> {
+        // Nothing is unpacked: every read runs from the file itself.
+        Some(Box::new(self.clone()))
     }
 
     fn raw_names(&mut self) -> Result<Vec<String>, ArchiveError> {

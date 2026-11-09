@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use super::{find_first, run_capture, sorted_pages, Archive, ArchiveError};
 
+#[derive(Clone)]
 pub struct SevenZipArchive {
     path: PathBuf,
     name: String,
@@ -57,6 +58,11 @@ impl SevenZipArchive {
 impl Archive for SevenZipArchive {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn try_clone(&self) -> Option<Box<dyn Archive>> {
+        // Nothing is unpacked: every read runs from the file itself.
+        Some(Box::new(self.clone()))
     }
 
     fn raw_names(&mut self) -> Result<Vec<String>, ArchiveError> {

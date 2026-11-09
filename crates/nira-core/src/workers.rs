@@ -23,6 +23,12 @@ pub enum ThumbCmd {
     },
     /// Pause/resume generation (paused while a page is decoding).
     Pause(bool),
+    /// Read `path` through this handle (a clone of the one the open thread
+    /// listed), instead of opening and unpacking it again.
+    UseArchive {
+        path: PathBuf,
+        archive: Box<dyn Archive>,
+    },
 }
 
 /// A finished thumbnail: `(thumb generation, page index, w, h, rgba)`.
@@ -118,6 +124,12 @@ pub struct RescaleResult {
 pub enum WorkerCmd {
     Decode(PageCmd),
     Rescale(RescaleCmd),
+    /// Read `path` through this handle (the one the open thread listed and
+    /// unpacked), instead of opening and unpacking it again. No result.
+    UseArchive {
+        path: PathBuf,
+        archive: Box<dyn Archive>,
+    },
 }
 
 /// Results from the page worker thread.
@@ -138,7 +150,11 @@ pub enum OpenError {
 
 /// An archive opened and listed on a background thread.
 pub struct OpenedArchive {
+    /// Listed (and unpacked, if need be): for the page worker.
     pub archive: Box<dyn Archive>,
+    /// A clone sharing what `archive` unpacked: for the thumbnailer.
+    /// `None` if the backend can't clone; it then opens the path itself.
+    pub twin: Option<Box<dyn Archive>>,
     pub pages: Vec<String>,
     /// `detect` result, for the log and the cover-alone rule.
     pub kind: Option<String>,
@@ -164,6 +180,8 @@ pub fn open_archive(path: &Path) -> Result<OpenedArchive, OpenError> {
     if pages.is_empty() {
         return Err(OpenError::Empty);
     }
+    // Cloned here, off the UI thread (a zip clone reads its directory again).
+    let twin = archive.try_clone();
     let kind = archive::detect(path).map(|k| k.to_string());
     let size = if path.is_dir() {
         std::fs::read_dir(path)
@@ -180,6 +198,7 @@ pub fn open_archive(path: &Path) -> Result<OpenedArchive, OpenError> {
     };
     Ok(OpenedArchive {
         archive,
+        twin,
         pages,
         kind,
         size,
@@ -230,6 +249,11 @@ pub fn spawn_thumbnailer(
                     ThumbCmd::Pause(p) => {
                         log::debug!("thumb manager: pause={p}");
                         paused = p;
+                    }
+                    ThumbCmd::UseArchive { path: p, archive } => {
+                        log::debug!("thumb manager: archive handed over for {}", p.display());
+                        ar = Some(archive);
+                        ar_path = Some(p);
                     }
                 }
             };
@@ -329,6 +353,12 @@ pub fn spawn_page_worker(
                     WorkerResult::Decoded(decode_pages(ar.as_mut(), &cmd))
                 }
                 WorkerCmd::Rescale(cmd) => WorkerResult::Rescaled(rescale_pages(cmd)),
+                WorkerCmd::UseArchive { path, archive } => {
+                    log::debug!("page worker: archive handed over for {}", path.display());
+                    ar = Some(archive);
+                    ar_path = Some(path);
+                    continue;
+                }
             };
             if page_res_tx.send(res).is_err() {
                 break; // main thread is gone
@@ -466,5 +496,76 @@ pub fn rescale_pages(cmd: RescaleCmd) -> RescaleResult {
         req: cmd.req,
         gen: cmd.gen,
         pages,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::archive::ArchiveError;
+
+    /// An archive that exists only in memory: one 4x3 PNG page.
+    struct InMemory;
+
+    impl Archive for InMemory {
+        fn name(&self) -> &str {
+            "in-memory"
+        }
+
+        fn page_names(&mut self) -> Result<Vec<String>, ArchiveError> {
+            Ok(vec!["p.png".into()])
+        }
+
+        fn read(&mut self, _name: &str) -> Result<Vec<u8>, ArchiveError> {
+            let mut png = Vec::new();
+            image::RgbaImage::new(4, 3)
+                .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+                .unwrap();
+            Ok(png)
+        }
+    }
+
+    #[test]
+    fn the_page_worker_reads_through_a_handed_over_archive() {
+        let (cmd_tx, cmd_rx) = std::sync::mpsc::channel();
+        let (res_tx, res_rx) = std::sync::mpsc::channel();
+        let worker = spawn_page_worker(cmd_rx, res_tx);
+        // No such file: a page can only come from the handed-over handle,
+        // not from opening the path again.
+        let path = PathBuf::from("/nonexistent/nira-test-book.cbz");
+        cmd_tx
+            .send(WorkerCmd::UseArchive {
+                path: path.clone(),
+                archive: Box::new(InMemory),
+            })
+            .unwrap();
+        cmd_tx
+            .send(WorkerCmd::Decode(PageCmd {
+                req: 1,
+                gen: 1,
+                pgen: 0,
+                display: false,
+                viewport: (800.0, 600.0),
+                zoom: ZoomModel::default(),
+                path,
+                pages: Arc::new(vec!["p.png".into()]),
+                indices: vec![0],
+                rotation: 0,
+                flip_h: false,
+                flip_v: false,
+                wide_alone: false,
+                brightness: 1.0,
+                contrast: 1.0,
+                auto_enhance: false,
+                exif_rotation: false,
+            }))
+            .unwrap();
+        let WorkerResult::Decoded(res) = res_rx.recv().unwrap() else {
+            panic!("expected a decode result");
+        };
+        assert_eq!(res.pages.len(), 1);
+        assert_eq!((res.pages[0].full_w, res.pages[0].full_h), (4, 3));
+        drop(cmd_tx);
+        worker.join().unwrap();
     }
 }

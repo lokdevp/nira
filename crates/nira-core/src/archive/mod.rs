@@ -109,6 +109,32 @@ pub trait Archive: Send {
 
     /// Release any held resources (temp dirs, file handles).
     fn close(&mut self) {}
+
+    /// Another handle on the same archive, for reading from another thread.
+    /// It shares whatever this one has already listed and unpacked, so
+    /// nothing is listed or unpacked again. `None`: open the path again.
+    fn try_clone(&self) -> Option<Box<dyn Archive>> {
+        None
+    }
+}
+
+/// A temp file or folder made while unpacking, removed when the last
+/// archive handle sharing it (see `Archive::try_clone`) is dropped.
+pub(crate) struct TempPath(pub(crate) PathBuf);
+
+impl Drop for TempPath {
+    fn drop(&mut self) {
+        let removed = if self.0.is_dir() {
+            std::fs::remove_dir_all(&self.0)
+        } else {
+            std::fs::remove_file(&self.0)
+        };
+        if let Err(e) = removed {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                log::warn!("cannot remove {}: {e}", self.0.display());
+            }
+        }
+    }
 }
 
 /// Detect the archive kind from magic bytes.
@@ -251,6 +277,7 @@ pub(crate) fn run_capture(prog: &str, args: &[&str]) -> Result<Vec<u8>, ArchiveE
 }
 
 /// A directory of loose images (opened directly).
+#[derive(Clone)]
 pub struct DirArchive {
     dir: PathBuf,
     name: String,
@@ -273,6 +300,11 @@ impl DirArchive {
 impl Archive for DirArchive {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn try_clone(&self) -> Option<Box<dyn Archive>> {
+        // Nothing is unpacked: every read runs from the file itself.
+        Some(Box::new(self.clone()))
     }
 
     fn page_names(&mut self) -> Result<Vec<String>, ArchiveError> {

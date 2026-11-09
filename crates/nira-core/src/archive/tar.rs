@@ -9,8 +9,9 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
-use super::{sorted_pages, Archive, ArchiveError, ArchiveKind};
+use super::{sorted_pages, Archive, ArchiveError, ArchiveKind, TempPath};
 
 static TMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -27,11 +28,12 @@ pub struct TarArchive {
     name: String,
     kind: Option<ArchiveKind>,
     pages: Option<Vec<String>>,
-    index: Option<TarIndex>,
+    /// Shared with clones (`try_clone`), like `unpacked`.
+    index: Option<Arc<TarIndex>>,
     /// Decompressed copy of a gzip/bzip2/xz stream, written while indexing
     /// so pages can be read by seeking instead of decompressing from the
-    /// start for every page.
-    unpacked: Option<PathBuf>,
+    /// start for every page. Shared with clones; removed with the last one.
+    unpacked: Option<Arc<TempPath>>,
 }
 
 fn open_tar_reader(
@@ -135,7 +137,7 @@ impl TarArchive {
         })();
         match result {
             Ok(index) => {
-                self.unpacked = Some(tmp);
+                self.unpacked = Some(Arc::new(TempPath(tmp)));
                 Ok(index)
             }
             Err(e) => {
@@ -153,15 +155,26 @@ impl TarArchive {
             } else {
                 build_index(BufReader::new(File::open(&self.path)?))?.0
             };
-            self.index = Some(index);
+            self.index = Some(Arc::new(index));
         }
-        Ok(self.index.as_ref().expect("index was just built"))
+        Ok(self.index.as_deref().expect("index was just built"))
     }
 }
 
 impl Archive for TarArchive {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn try_clone(&self) -> Option<Box<dyn Archive>> {
+        Some(Box::new(TarArchive {
+            path: self.path.clone(),
+            name: self.name.clone(),
+            kind: self.kind,
+            pages: self.pages.clone(),
+            index: self.index.clone(),
+            unpacked: self.unpacked.clone(),
+        }))
     }
 
     fn raw_names(&mut self) -> Result<Vec<String>, ArchiveError> {
@@ -185,7 +198,10 @@ impl Archive for TarArchive {
                 self.path.display()
             ))
         })?;
-        let data = self.unpacked.as_deref().unwrap_or(&self.path);
+        let data = self
+            .unpacked
+            .as_ref()
+            .map_or(self.path.as_path(), |t| t.0.as_path());
         let mut file = File::open(data)?;
         file.seek(SeekFrom::Start(offset))?;
         let mut buf = vec![0; size as usize];
@@ -194,16 +210,9 @@ impl Archive for TarArchive {
     }
 
     fn close(&mut self) {
-        if let Some(tmp) = self.unpacked.take() {
-            let _ = std::fs::remove_file(tmp);
-        }
+        // The unpacked file goes once no clone uses it (`TempPath`).
+        self.unpacked = None;
         self.index = None;
-    }
-}
-
-impl Drop for TarArchive {
-    fn drop(&mut self) {
-        self.close();
     }
 }
 
@@ -255,10 +264,23 @@ mod tests {
             for (i, p) in pages.iter().enumerate().rev() {
                 assert_eq!(ar.read(p).unwrap(), want[i], "{name} {p}");
             }
-            let tmp = ar.unpacked.clone().expect("compressed tar is unpacked");
+            let tmp = ar
+                .unpacked
+                .as_ref()
+                .expect("compressed tar is unpacked")
+                .0
+                .clone();
             assert!(tmp.exists());
+            // A clone reads the same unpacked file: nothing is unpacked again.
+            let mut twin = ar.try_clone().expect("tars clone");
+            assert_eq!(twin.read(&pages[0]).unwrap(), want[0], "{name} clone");
             ar.close();
-            assert!(!tmp.exists(), "{name}: temp file removed on close");
+            assert!(tmp.exists(), "{name}: kept while a clone uses it");
+            drop(twin);
+            assert!(
+                !tmp.exists(),
+                "{name}: temp file removed with the last handle"
+            );
         }
     }
 }

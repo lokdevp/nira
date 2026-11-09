@@ -6,8 +6,9 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
-use super::{open, sorted_pages, Archive, ArchiveError};
+use super::{open, sorted_pages, Archive, ArchiveError, TempPath};
 
 /// Extensions considered embedded-archive candidates (mirrors
 /// `archive_tools.is_archive_file`).
@@ -32,7 +33,10 @@ pub struct RecursiveArchive {
     archives: Vec<Box<dyn Archive>>,
     /// Display name -> (archive index, entry name inside that archive).
     map: HashMap<String, (usize, String)>,
-    tmp_dir: Option<PathBuf>,
+    /// Where embedded archives were extracted. Shared with clones
+    /// (`try_clone`); removed with the last one. Declared after `archives`,
+    /// so their file handles are dropped before the folder is removed.
+    tmp_dir: Option<Arc<TempPath>>,
     listed: bool,
     pages: Vec<String>,
 }
@@ -58,10 +62,10 @@ impl RecursiveArchive {
             if let Err(e) = std::fs::create_dir_all(&dir) {
                 log::warn!("cannot create {}: {e}", dir.display());
             }
-            self.tmp_dir = Some(dir.clone());
+            self.tmp_dir = Some(Arc::new(TempPath(dir.clone())));
             dir
         } else {
-            self.tmp_dir.clone().unwrap()
+            self.tmp_dir.as_ref().map(|t| t.0.clone()).unwrap()
         }
     }
 
@@ -142,6 +146,22 @@ impl Archive for RecursiveArchive {
         &self.name
     }
 
+    fn try_clone(&self) -> Option<Box<dyn Archive>> {
+        let archives = self
+            .archives
+            .iter()
+            .map(|a| a.try_clone())
+            .collect::<Option<Vec<_>>>()?;
+        Some(Box::new(RecursiveArchive {
+            name: self.name.clone(),
+            archives,
+            map: self.map.clone(),
+            tmp_dir: self.tmp_dir.clone(),
+            listed: self.listed,
+            pages: self.pages.clone(),
+        }))
+    }
+
     fn raw_names(&mut self) -> Result<Vec<String>, ArchiveError> {
         self.page_names()
     }
@@ -171,20 +191,14 @@ impl Archive for RecursiveArchive {
         for a in &mut self.archives {
             a.close();
         }
-        if let Some(dir) = self.tmp_dir.take() {
-            let _ = std::fs::remove_dir_all(&dir);
-        }
+        // The folder goes once no clone uses it (`TempPath`).
+        self.tmp_dir = None;
     }
 }
 
 impl Drop for RecursiveArchive {
     fn drop(&mut self) {
-        for a in &mut self.archives {
-            a.close();
-        }
-        if let Some(dir) = self.tmp_dir.take() {
-            let _ = std::fs::remove_dir_all(&dir);
-        }
+        self.close();
     }
 }
 
@@ -199,6 +213,35 @@ mod tests {
             .join("files")
             .join("archives")
             .join(name)
+    }
+
+    #[test]
+    fn clones_share_the_extracted_archives() {
+        // red_and_blues.tar holds red_and_blues.7z and red_and_blues.rar,
+        // each with red.png and a further embedded archive of blues.
+        let path = archive_path("red_and_blues.tar");
+        let mut ar = RecursiveArchive::new(crate::archive::open_plain(&path).unwrap());
+        let pages = ar.page_names().unwrap();
+        assert!(
+            pages.iter().any(|p| p.ends_with("/red.png")),
+            "embedded pages are listed: {pages:?}"
+        );
+        let dir = ar
+            .tmp_dir
+            .as_ref()
+            .expect("blues.7z was extracted")
+            .0
+            .clone();
+        let mut twin = ar.try_clone().expect("every backend clones");
+        assert_eq!(twin.page_names().unwrap(), pages);
+        drop(ar);
+        assert!(dir.is_dir(), "kept while the clone uses it");
+        for page in &pages {
+            let bytes = twin.read(page).unwrap();
+            assert!(image::guess_format(&bytes).is_ok(), "{page}");
+        }
+        drop(twin);
+        assert!(!dir.exists(), "removed with the last handle");
     }
 
     #[test]

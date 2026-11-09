@@ -28,6 +28,7 @@ use std::thread::JoinHandle;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
+use nira_core::archive::Archive;
 use nira_core::bookmarks::Bookmarks;
 use nira_core::history::History;
 use nira_core::i18n::{t, t_args};
@@ -354,6 +355,33 @@ impl NiraWindow {
         }
     }
 
+    /// Give the workers the handles the open thread listed, so the book is
+    /// opened and unpacked once: the page worker gets `archive`, the
+    /// thumbnailer `twin`. Without a twin, the thumbnailer opens the path.
+    fn hand_over_archive(
+        &self,
+        path: &Path,
+        archive: Box<dyn Archive>,
+        twin: Option<Box<dyn Archive>>,
+    ) {
+        let imp = self.imp();
+        if let (Some(twin), Some(tx)) = (twin, imp.thumb_tx.borrow().as_ref()) {
+            let _ = tx.send(ThumbCmd::UseArchive {
+                path: path.to_path_buf(),
+                archive: twin,
+            });
+        }
+        if let Some(tx) = imp.page_tx.borrow().as_ref() {
+            let cmd = WorkerCmd::UseArchive {
+                path: path.to_path_buf(),
+                archive,
+            };
+            if tx.send(cmd).is_err() {
+                log::error!("the page worker stopped");
+            }
+        }
+    }
+
     fn on_worker_result(&self, res: WorkerResult) {
         if let Some(frame) = self.with_reader(|r| r.on_result(res)) {
             self.draw(frame);
@@ -424,6 +452,9 @@ impl NiraWindow {
             opened.pages.len(),
             opened.kind.as_deref().unwrap_or("folder")
         );
+        // Before the reader's first decode command, so the page worker
+        // reads through this handle instead of opening the book again.
+        self.hand_over_archive(&path, opened.archive, opened.twin);
         let start = start.unwrap_or_else(|| self.resume_page(&path));
         self.imp().book_bytes.set(opened.size);
         self.imp().book_kind.replace(opened.kind.clone());

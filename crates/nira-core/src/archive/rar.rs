@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use super::{find_first, run_capture, sorted_pages, which, Archive, ArchiveError};
 
+#[derive(Clone)]
 pub struct RarArchive {
     path: PathBuf,
     name: String,
@@ -81,6 +82,11 @@ impl RarArchive {
 impl Archive for RarArchive {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn try_clone(&self) -> Option<Box<dyn Archive>> {
+        // Nothing is unpacked: every read runs from the file itself.
+        Some(Box::new(self.clone()))
     }
 
     fn raw_names(&mut self) -> Result<Vec<String>, ArchiveError> {
