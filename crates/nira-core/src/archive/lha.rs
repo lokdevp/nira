@@ -48,7 +48,7 @@ impl LhaArchive {
     fn list_raw(&self) -> Result<Vec<String>, ArchiveError> {
         let p = self.path.to_string_lossy().into_owned();
         let raw = match self.backend.as_str() {
-            "7z" => run_capture(&self.prog, &["l", "-slt", &p])?,
+            "7z" => run_capture(&self.prog, &["l", "-slt", "--", &p])?,
             _ => run_capture("lha", &["l", "-g", "-q2", &p])?,
         };
         let text = String::from_utf8_lossy(&raw);
@@ -96,7 +96,8 @@ impl Archive for LhaArchive {
     fn read(&mut self, name: &str) -> Result<Vec<u8>, ArchiveError> {
         let p = self.path.to_string_lossy().into_owned();
         match self.backend.as_str() {
-            "7z" => run_capture(&self.prog, &["e", "-so", &p, name]),
+            // `--` and -spd: names like `-x.jpg`, `@x.png`, `*.jpg` are names.
+            "7z" => run_capture(&self.prog, &["e", "-so", "-spd", "--", &p, name]),
             _ => run_capture("lha", &["p", "-q2", &p, name]),
         }
     }
@@ -105,6 +106,31 @@ impl Archive for LhaArchive {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_like_switches_and_wildcards_are_read_as_names() {
+        use crate::archive::tricky_names::{assert_reads_like_zip, fixture};
+        let mut backends = Vec::new();
+        if let Some(prog) = find_first(SEVENZ_LHA_BINARIES) {
+            backends.push(("7z".to_string(), prog));
+        }
+        if which("lha").is_some() {
+            backends.push(("lha".to_string(), "lha".to_string()));
+        }
+        for (backend, prog) in backends {
+            for set in ["OptEntry", "GlobEntries"] {
+                let file = format!("{set}.lha");
+                let ar = LhaArchive {
+                    path: fixture(&file),
+                    name: file.clone(),
+                    backend: backend.clone(),
+                    prog: prog.clone(),
+                    pages: None,
+                };
+                assert_reads_like_zip(ar, set, &format!("{file} {backend}"), &[]);
+            }
+        }
+    }
 
     fn archive_path(name: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))

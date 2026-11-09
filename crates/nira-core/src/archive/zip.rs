@@ -1,10 +1,9 @@
 //! CBZ / ZIP support via the pure-Rust `zip` crate.
 
 use std::fs::File;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use super::{sorted_pages, Archive, ArchiveError};
+use super::{read_capped, sorted_pages, too_large, Archive, ArchiveError, MAX_ENTRY_BYTES};
 
 pub struct ZipArchive {
     path: PathBuf,
@@ -71,9 +70,13 @@ impl Archive for ZipArchive {
                 self.path.display()
             ))
         })?;
-        let mut buf = Vec::new();
-        file.read_to_end(&mut buf)?;
-        Ok(buf)
+        // The declared size is checked first, and the read is capped too,
+        // since a crafted entry may declare less than it inflates to.
+        let what = format!("'{name}'");
+        if file.size() > MAX_ENTRY_BYTES {
+            return Err(too_large(&what, MAX_ENTRY_BYTES));
+        }
+        read_capped(&mut file, MAX_ENTRY_BYTES, &what)
     }
 }
 

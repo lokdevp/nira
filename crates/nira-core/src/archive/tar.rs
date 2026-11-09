@@ -11,7 +11,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use super::{sorted_pages, Archive, ArchiveError, ArchiveKind, TempPath};
+use super::{
+    sorted_pages, too_large, Archive, ArchiveError, ArchiveKind, TempPath, MAX_ENTRY_BYTES,
+    MAX_UNPACKED_BYTES,
+};
 
 static TMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -59,15 +62,26 @@ fn is_compressed(kind: Option<ArchiveKind>) -> bool {
     )
 }
 
-/// A reader that copies everything it reads into `out`.
-struct Tee<'a, R: Read> {
+/// A reader that copies everything it reads into `out`, failing once more
+/// than `limit` bytes went through (a compressed tar that unpacks to more
+/// than any comic would).
+struct Tee<'a, R: Read, W: Write> {
     inner: R,
-    out: &'a mut BufWriter<File>,
+    out: &'a mut W,
+    written: u64,
+    limit: u64,
 }
 
-impl<R: Read> Read for Tee<'_, R> {
+impl<R: Read, W: Write> Read for Tee<'_, R, W> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let n = self.inner.read(buf)?;
+        self.written += n as u64;
+        if self.written > self.limit {
+            return Err(std::io::Error::other(format!(
+                "the archive unpacks to more than {} GiB",
+                self.limit / (1024 * 1024 * 1024)
+            )));
+        }
         self.out.write_all(&buf[..n])?;
         Ok(n)
     }
@@ -127,6 +141,8 @@ impl TarArchive {
             let tee = Tee {
                 inner: open_tar_reader(&self.path, self.kind)?,
                 out: &mut out,
+                written: 0,
+                limit: MAX_UNPACKED_BYTES,
             };
             let (index, mut rest) = build_index(tee)?;
             // Copy the trailer too, so the temp file is a whole tar.
@@ -198,6 +214,10 @@ impl Archive for TarArchive {
                 self.path.display()
             ))
         })?;
+        // The size comes from the entry's header: check it before allocating.
+        if size > MAX_ENTRY_BYTES {
+            return Err(too_large(&format!("'{name}'"), MAX_ENTRY_BYTES));
+        }
         let data = self
             .unpacked
             .as_ref()
@@ -219,6 +239,23 @@ impl Archive for TarArchive {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_like_switches_and_wildcards_are_read_as_names() {
+        use crate::archive::tricky_names::{assert_reads_like_zip, fixture};
+        for set in ["OptEntry", "GlobEntries"] {
+            for ext in ["tar", "tar.gz", "tar.bz2"] {
+                let file = format!("Solid{set}.{ext}");
+                let path = fixture(&file);
+                if !path.exists() {
+                    continue;
+                }
+                let ar = TarArchive::open(&path, detect(&path).filter(|k| *k != ArchiveKind::Tar))
+                    .unwrap();
+                assert_reads_like_zip(ar, set, &file, &[]);
+            }
+        }
+    }
     use crate::archive::detect;
 
     fn archive_path(name: &str) -> PathBuf {
@@ -243,6 +280,20 @@ mod tests {
             let mut ar = crate::archive::open(&path).expect(name);
             assert_eq!(ar.page_names().expect(name).len(), 4, "{name}");
         }
+    }
+
+    #[test]
+    fn unpacking_stops_past_the_limit() {
+        let mut out = Vec::new();
+        let mut tee = Tee {
+            inner: &[0u8; 100][..],
+            out: &mut out,
+            written: 0,
+            limit: 64,
+        };
+        let err = std::io::copy(&mut tee, &mut std::io::sink()).unwrap_err();
+        assert!(err.to_string().contains("unpacks to more than"), "{err}");
+        assert!(out.len() <= 64, "nothing past the limit is written");
     }
 
     #[test]

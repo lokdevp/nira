@@ -9,7 +9,7 @@ pub mod zip;
 
 use std::fmt;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -261,21 +261,89 @@ pub(crate) fn which(cmd: &str) -> Option<PathBuf> {
     None
 }
 
-/// Run a command and capture stdout (and stderr on failure).
+/// The largest page Nira reads out of an archive. Real comic pages are a
+/// few MiB; the image decoder refuses more than 512 MiB of pixels anyway.
+/// The cap stops a crafted entry (a zip bomb, or a tool printing without
+/// end) from filling memory before the decoder gets to say no.
+pub(crate) const MAX_ENTRY_BYTES: u64 = 256 * 1024 * 1024;
+
+/// The most a compressed tar may unpack to on disk.
+pub(crate) const MAX_UNPACKED_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+
+/// Read all of `r`, failing once it passes `limit` bytes. `what` names the
+/// data in the error.
+pub(crate) fn read_capped(r: impl Read, limit: u64, what: &str) -> Result<Vec<u8>, ArchiveError> {
+    let mut buf = Vec::new();
+    r.take(limit + 1).read_to_end(&mut buf)?;
+    if buf.len() as u64 > limit {
+        return Err(too_large(what, limit));
+    }
+    Ok(buf)
+}
+
+pub(crate) fn too_large(what: &str, limit: u64) -> ArchiveError {
+    ArchiveError::Other(format!(
+        "{what} is larger than {} MiB",
+        limit / (1024 * 1024)
+    ))
+}
+
+/// Run a command and capture stdout (and stderr on failure), at most
+/// `MAX_ENTRY_BYTES` of it.
 pub(crate) fn run_capture(prog: &str, args: &[&str]) -> Result<Vec<u8>, ArchiveError> {
-    let out = Command::new(prog)
+    run_tool(prog, args, None, MAX_ENTRY_BYTES)
+}
+
+/// Run `prog`, write `stdin` to it (or close its input), and return its
+/// stdout. Output past `limit` bytes stops the tool and fails.
+pub(crate) fn run_tool(
+    prog: &str,
+    args: &[&str],
+    stdin: Option<&str>,
+    limit: u64,
+) -> Result<Vec<u8>, ArchiveError> {
+    let failed = |e: std::io::Error| ArchiveError::Other(format!("failed to run {prog}: {e}"));
+    let mut child = Command::new(prog)
         .args(args)
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|e| ArchiveError::Other(format!("failed to run {prog}: {e}")))?;
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
+        .stdin(if stdin.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(failed)?;
+    if let (Some(text), Some(mut input)) = (stdin, child.stdin.take()) {
+        // Small (a file name); dropping `input` closes the tool's stdin.
+        input.write_all(text.as_bytes()).map_err(failed)?;
+    }
+    // Drain stderr alongside stdout, so a tool filling one pipe while we
+    // wait on the other can't stall.
+    let stderr = child.stderr.take().map(|mut err| {
+        std::thread::spawn(move || {
+            let mut text = Vec::new();
+            let _ = err.by_ref().take(64 * 1024).read_to_end(&mut text);
+            let _ = std::io::copy(&mut err, &mut std::io::sink());
+            text
+        })
+    });
+    let stdout = child.stdout.take().expect("stdout is piped");
+    let out = read_capped(stdout, limit, &format!("the output of {prog}"));
+    if out.is_err() {
+        let _ = child.kill();
+    }
+    let status = child.wait().map_err(failed)?;
+    let stderr = stderr.and_then(|h| h.join().ok()).unwrap_or_default();
+    let out = out?;
+    if !status.success() {
+        let stderr = String::from_utf8_lossy(&stderr);
         return Err(ArchiveError::Other(format!(
             "{prog} failed: {}",
             stderr.trim()
         )));
     }
-    Ok(out.stdout)
+    Ok(out)
 }
 
 /// A directory of loose images (opened directly).
@@ -326,5 +394,83 @@ impl Archive for DirArchive {
 
     fn read(&mut self, name: &str) -> Result<Vec<u8>, ArchiveError> {
         Ok(std::fs::read(name)?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_are_capped() {
+        let data = [7u8; 10];
+        assert_eq!(read_capped(&data[..], 10, "x").unwrap().len(), 10);
+        assert!(read_capped(&data[..], 11, "x").is_ok());
+        let err = read_capped(&data[..], 9, "the page").unwrap_err();
+        assert!(err.to_string().contains("the page is larger than"), "{err}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn tool_output_is_capped_and_stdin_is_passed() {
+        let flood = run_tool("sh", &["-c", "head -c 100 /dev/zero"], None, 10);
+        assert!(flood.is_err());
+        // A tool that never stops printing is stopped too.
+        assert!(run_tool("yes", &[], None, 1024).is_err());
+        let echoed = run_tool("cat", &[], Some("@eh.png\n"), 1024).unwrap();
+        assert_eq!(echoed, b"@eh.png\n");
+        let fail = run_tool("sh", &["-c", "echo oops >&2; exit 3"], None, 1024).unwrap_err();
+        assert!(fail.to_string().contains("oops"), "{fail}");
+    }
+}
+
+/// Fixtures whose entry names look like switches (`-rg.jpeg`, `--o.JPG`,
+/// `+ar.jpg`, `@eh.png`) or wildcards (`*oo.JPG`, `?eh.png`, `[rg.jpeg`),
+/// for checking that every backend reads them as plain names.
+#[cfg(test)]
+pub(crate) mod tricky_names {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    pub fn fixture(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test/files/archives")
+            .join(name)
+    }
+
+    /// `<set>.zip` read with the pure-Rust zip reader, which takes no
+    /// command line: the bytes every other backend must match.
+    fn reference(set: &str) -> BTreeMap<String, Vec<u8>> {
+        let mut zip = zip::ZipArchive::open(&fixture(&format!("{set}.zip"))).unwrap();
+        zip.page_names()
+            .unwrap()
+            .into_iter()
+            .map(|n| {
+                let bytes = zip.read(&n).unwrap();
+                (n, bytes)
+            })
+            .collect()
+    }
+
+    /// Read every page of `ar` (a copy of fixture set `set`, "OptEntry" or
+    /// "GlobEntries") and compare it with the zip reference. `unlisted`:
+    /// names the backend's tool itself never lists.
+    pub fn assert_reads_like_zip(mut ar: impl Archive, set: &str, label: &str, unlisted: &[&str]) {
+        let mut want = reference(set);
+        want.retain(|name, _| !unlisted.contains(&name.as_str()));
+        let mut names = ar.page_names().unwrap();
+        names.sort();
+        assert_eq!(names, want.keys().cloned().collect::<Vec<_>>(), "{label}");
+        for (name, bytes) in &want {
+            let got = ar
+                .read(name)
+                .unwrap_or_else(|e| panic!("{label} {name}: {e}"));
+            assert!(
+                got == *bytes,
+                "{label} {name}: {} bytes, want {}",
+                got.len(),
+                bytes.len()
+            );
+        }
     }
 }

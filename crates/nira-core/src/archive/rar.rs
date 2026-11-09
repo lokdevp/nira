@@ -4,7 +4,9 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{find_first, run_capture, sorted_pages, which, Archive, ArchiveError};
+use super::{
+    find_first, run_capture, run_tool, sorted_pages, which, Archive, ArchiveError, MAX_ENTRY_BYTES,
+};
 
 #[derive(Clone)]
 pub struct RarArchive {
@@ -46,8 +48,8 @@ impl RarArchive {
         let raw = match self.backend.as_str() {
             // NOTE: do NOT pass -inul to `lb`: on recent RARLAB unrar it also
             // suppresses the listing output itself, yielding an empty list.
-            "unrar" => run_capture("unrar", &["lb", "-p-", &path])?,
-            _ => run_capture(&self.prog, &["l", "-slt", &path])?,
+            "unrar" => run_capture("unrar", &["lb", "-p-", "--", &path])?,
+            _ => run_capture(&self.prog, &["l", "-slt", "--", &path])?,
         };
         let text = String::from_utf8_lossy(&raw);
         let mut names = Vec::new();
@@ -104,8 +106,19 @@ impl Archive for RarArchive {
     fn read(&mut self, name: &str) -> Result<Vec<u8>, ArchiveError> {
         let path = self.path.to_string_lossy().into_owned();
         match self.backend.as_str() {
-            "unrar" => run_capture("unrar", &["p", "-p-", &path, name]),
-            _ => run_capture(&self.prog, &["e", "-so", &path, name]),
+            // After `--`, a name like `-rg.jpg` is a file name, not a switch.
+            // unrar still reads a leading `@` as a list file there, so such
+            // names go on stdin instead (`-n@`, which in turn mishandles
+            // `*`; the two cover each other). -inul keeps unrar's messages
+            // out of the page bytes.
+            "unrar" if name.starts_with('@') => run_tool(
+                "unrar",
+                &["p", "-inul", "-p-", "-n@", "--", &path],
+                Some(&format!("{name}\n")),
+                MAX_ENTRY_BYTES,
+            ),
+            "unrar" => run_capture("unrar", &["p", "-inul", "-p-", "--", &path, name]),
+            _ => run_capture(&self.prog, &["e", "-so", "-spd", "--", &path, name]),
         }
     }
 }
@@ -113,6 +126,38 @@ impl Archive for RarArchive {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_like_switches_and_wildcards_are_read_as_names() {
+        use crate::archive::tricky_names::{assert_reads_like_zip, fixture};
+        let mut backends = Vec::new();
+        if which("unrar").is_some() {
+            backends.push(("unrar".to_string(), "unrar".to_string()));
+        }
+        if let Some(prog) = find_first(&["7z", "7zz"]) {
+            backends.push(("7z".to_string(), prog));
+        }
+        for (backend, prog) in backends {
+            for set in ["OptEntry", "GlobEntries"] {
+                for file in [format!("{set}.rar"), format!("Solid{set}.rar")] {
+                    let ar = RarArchive {
+                        path: fixture(&file),
+                        name: file.clone(),
+                        backend: backend.clone(),
+                        prog: prog.clone(),
+                        pages: None,
+                    };
+                    // unrar (7.x) never lists a name containing `*`.
+                    let unlisted: &[&str] = if backend == "unrar" {
+                        &["*oo.JPG"]
+                    } else {
+                        &[]
+                    };
+                    assert_reads_like_zip(ar, set, &format!("{file} {backend}"), unlisted);
+                }
+            }
+        }
+    }
     use std::path::PathBuf;
 
     fn archive_path(name: &str) -> PathBuf {
