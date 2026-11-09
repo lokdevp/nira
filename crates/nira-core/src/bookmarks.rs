@@ -2,7 +2,7 @@
 //! does not write it: call `save` (the app does so off the UI thread).
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -28,11 +28,23 @@ impl Bookmarks {
     }
 
     pub fn load() -> Bookmarks {
-        let path = Self::path();
-        match fs::read_to_string(&path) {
-            Ok(text) => serde_json::from_str(&text).unwrap_or_default(),
-            Err(_) => Bookmarks::default(),
-        }
+        Self::load_from(&Self::path())
+    }
+
+    /// Load `path`. A file that doesn't parse is moved aside (see
+    /// `paths::set_aside_corrupt`) so saving the empty list can't destroy it.
+    fn load_from(path: &Path) -> Bookmarks {
+        let Ok(text) = fs::read_to_string(path) else {
+            return Bookmarks::default();
+        };
+        serde_json::from_str(&text).unwrap_or_else(|e| {
+            log::warn!(
+                "cannot parse {}: {e}; starting with no bookmarks",
+                path.display()
+            );
+            crate::paths::set_aside_corrupt(path);
+            Bookmarks::default()
+        })
     }
 
     pub fn save(&self) {
@@ -77,6 +89,19 @@ impl Bookmarks {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_truncated_file_loads_empty_and_is_kept() {
+        let dir = std::env::temp_dir().join(format!("nira-bookmarks-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("bookmarks.json");
+        fs::write(&path, "{\"items\": [{\"name\": \"vol").unwrap();
+        assert!(Bookmarks::load_from(&path).items.is_empty());
+        assert!(!path.exists());
+        assert!(dir.join("bookmarks.json.corrupt").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     fn mark(path: &str, page: u32) -> Bookmark {
         Bookmark {
