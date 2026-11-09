@@ -146,6 +146,8 @@ pub enum OpenError {
     Open(String),
     List(String),
     Empty,
+    /// No pages, only archives inside the archive (they are not opened).
+    NestedArchives,
 }
 
 /// An archive opened and listed on a background thread.
@@ -177,8 +179,24 @@ pub fn open_archive(path: &Path) -> Result<OpenedArchive, OpenError> {
     let pages = archive
         .page_names()
         .map_err(|e| OpenError::List(e.to_string()))?;
+    // Archives stored inside the book are not opened: say so when they are
+    // all it holds, and note them in the log otherwise.
+    let nested = archive
+        .raw_names()
+        .map(|names| names.iter().filter(|n| archive::is_archive_name(n)).count())
+        .unwrap_or(0);
     if pages.is_empty() {
-        return Err(OpenError::Empty);
+        return Err(if nested > 0 {
+            OpenError::NestedArchives
+        } else {
+            OpenError::Empty
+        });
+    }
+    if nested > 0 {
+        log::info!(
+            "{}: skipped {nested} archive(s) inside the book",
+            path.display()
+        );
     }
     // Cloned here, off the UI thread (a zip clone reads its directory again).
     let twin = archive.try_clone();
@@ -523,6 +541,17 @@ mod tests {
                 .unwrap();
             Ok(png)
         }
+    }
+
+    #[test]
+    fn a_book_of_archives_is_reported_not_opened() {
+        // red_and_blues.tar holds only a .7z and a .rar, no pages.
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test/files/archives/red_and_blues.tar");
+        assert!(matches!(
+            open_archive(&path),
+            Err(OpenError::NestedArchives)
+        ));
     }
 
     #[test]

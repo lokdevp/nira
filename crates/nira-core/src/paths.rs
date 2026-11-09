@@ -70,8 +70,8 @@ fn xdg_dir(var: &str, fallback: &str) -> PathBuf {
         .join("nira")
 }
 
-/// This run's private folder for unpacked archives (compressed tars,
-/// archives inside archives): `cache_dir()/unpack/<pid>`, mode 0700 on Unix.
+/// This run's private folder for unpacked archives (decompressed tars):
+/// `cache_dir()/unpack/<pid>`, mode 0700 on Unix.
 /// It is under the cache rather than the system temp folder, which is often
 /// RAM-backed and shared by every account. Falls back to the temp folder if
 /// the cache can't be written.

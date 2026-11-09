@@ -628,5 +628,6 @@ fn open_error_text(path: &Path, e: &OpenError) -> String {
             &[("file", file.into()), ("reason", reason.clone().into())],
         ),
         OpenError::Empty => t_args("open-error-empty", &[("file", file.into())]),
+        OpenError::NestedArchives => t_args("open-error-nested", &[("file", file.into())]),
     }
 }

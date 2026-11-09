@@ -3,7 +3,6 @@
 pub mod lha;
 pub mod pdf;
 pub mod rar;
-pub mod recursive;
 pub mod sevenzip;
 pub mod tar;
 pub mod zip;
@@ -23,6 +22,20 @@ pub const IMAGE_EXTENSIONS: &[&str] = &[
     "jpg", "jpeg", "png", "gif", "bmp", "webp", "tif", "tiff", "ico", "ppm", "pbm", "pgm", "pnm",
     "tga", "qoi",
 ];
+
+/// Extensions of archives (and PDFs) that may sit inside a book.
+const ARCHIVE_EXTENSIONS: &[&str] = &[
+    "zip", "cbz", "rar", "cbr", "7z", "cb7", "tar", "cbt", "gz", "bz2", "xz", "lha", "lzh", "pdf",
+];
+
+/// True if `name` looks like an archive (extension check, case-insensitive):
+/// a book inside the book, which is not opened.
+pub fn is_archive_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower
+        .rsplit_once('.')
+        .is_some_and(|(_, ext)| ARCHIVE_EXTENSIONS.contains(&ext))
+}
 
 /// True if `name` looks like an image file (extension check, case-insensitive).
 pub fn is_image_file(name: &str) -> bool {
@@ -95,8 +108,9 @@ pub trait Archive: Send {
     /// The archive file name (as opened).
     fn name(&self) -> &str;
 
-    /// All entries (unfiltered, unsorted) — used to discover embedded
-    /// archives. Defaults to the filtered page list.
+    /// All entries (unfiltered, unsorted): the page list is built from
+    /// them, and `open_archive` uses them to tell a book of archives from
+    /// an empty one. Defaults to the filtered page list.
     fn raw_names(&mut self) -> Result<Vec<String>, ArchiveError> {
         self.page_names()
     }
@@ -118,18 +132,13 @@ pub trait Archive: Send {
     }
 }
 
-/// A temp file or folder made while unpacking, removed when the last
-/// archive handle sharing it (see `Archive::try_clone`) is dropped.
+/// A temp file made while unpacking (a decompressed tar), removed when the
+/// last archive handle sharing it (see `Archive::try_clone`) is dropped.
 pub(crate) struct TempPath(pub(crate) PathBuf);
 
 impl Drop for TempPath {
     fn drop(&mut self) {
-        let removed = if self.0.is_dir() {
-            std::fs::remove_dir_all(&self.0)
-        } else {
-            std::fs::remove_file(&self.0)
-        };
-        if let Err(e) = removed {
+        if let Err(e) = std::fs::remove_file(&self.0) {
             if e.kind() != std::io::ErrorKind::NotFound {
                 log::warn!("cannot remove {}: {e}", self.0.display());
             }
@@ -188,19 +197,12 @@ pub fn detect(path: &Path) -> Option<ArchiveKind> {
     None
 }
 
-/// Open an archive and return a boxed reader that transparently handles
-/// archives embedded inside archives (mirrors `get_recursive_archive_handler`).
+/// Open a folder of images or an archive. Archives stored inside an
+/// archive are not opened: their entries are not pages.
 pub fn open(path: &Path) -> Result<Box<dyn Archive>, ArchiveError> {
     if path.is_dir() {
         return Ok(Box::new(DirArchive::open(path)));
     }
-    let plain = open_plain(path)?;
-    Ok(Box::new(recursive::RecursiveArchive::new(plain)))
-}
-
-/// Open an archive without the recursive wrapper (used internally by the
-/// recursive handler for embedded archives).
-pub fn open_plain(path: &Path) -> Result<Box<dyn Archive>, ArchiveError> {
     let kind = detect(path).ok_or_else(|| ArchiveError::Unsupported(path.display().to_string()))?;
     open_with_kind(path, kind)
 }
