@@ -119,7 +119,7 @@ impl TarArchive {
     /// Decompress the stream into a temp file while indexing it.
     fn index_compressed(&mut self) -> Result<TarIndex, ArchiveError> {
         let n = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let tmp = std::env::temp_dir().join(format!("nira-tar-{}-{n}.tar", std::process::id()));
+        let tmp = crate::paths::unpack_dir().join(format!("tar-{n}.tar"));
         let result = (|| {
             let mut out = BufWriter::new(File::create(&tmp)?);
             let tee = Tee {

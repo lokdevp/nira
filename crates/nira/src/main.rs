@@ -100,6 +100,8 @@ fn main() -> glib::ExitCode {
 
 fn activate(app: &gtk::Application, args: &Args) {
     let settings = Settings::load();
+    // Unpacked archives left behind by crashed runs.
+    std::thread::spawn(nira_core::paths::remove_stale_unpack_dirs);
     nira_core::i18n::init(&settings.appearance.language);
     let fullscreen = args.fullscreen || settings.view.fullscreen;
 

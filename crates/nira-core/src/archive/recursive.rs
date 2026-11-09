@@ -1,5 +1,6 @@
-//! Transparently handle archives embedded inside archives. Embedded archives are extracted to
-//! a temporary directory, opened recursively, and their pages are exposed
+//! Transparently handle archives embedded inside archives. Embedded
+//! archives are extracted to a folder in this run's unpack directory
+//! (`paths::unpack_dir`), opened recursively, and their pages are exposed
 //! with a path prefix (the embedded archive's entry name).
 
 use std::collections::HashMap;
@@ -53,8 +54,10 @@ impl RecursiveArchive {
     fn ensure_tmp(&mut self) -> PathBuf {
         if self.tmp_dir.is_none() {
             let n = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-            let dir = std::env::temp_dir().join(format!("nira-sub-{}-{n}", std::process::id()));
-            let _ = std::fs::create_dir_all(&dir);
+            let dir = crate::paths::unpack_dir().join(format!("sub-{n}"));
+            if let Err(e) = std::fs::create_dir_all(&dir) {
+                log::warn!("cannot create {}: {e}", dir.display());
+            }
             self.tmp_dir = Some(dir.clone());
             dir
         } else {
@@ -64,7 +67,6 @@ impl RecursiveArchive {
 
     /// List all pages, expanding embedded archives. Returns display names.
     fn do_list(&mut self) -> Result<Vec<String>, ArchiveError> {
-        let tmp = self.ensure_tmp();
         let mut out: Vec<String> = Vec::new();
         // Only the main archive is listed here. Embedded archives are opened
         // through `open`, which wraps them in their own RecursiveArchive, so
@@ -94,6 +96,8 @@ impl RecursiveArchive {
                 .next()
                 .unwrap_or("arc")
                 .to_ascii_lowercase();
+            // Made on first use: most books have no embedded archives.
+            let tmp = self.ensure_tmp();
             let path = tmp.join(format!("sub-{:04}.{ext}", self.archives.len()));
             if let Err(e) = std::fs::write(&path, &bytes) {
                 log::warn!("cannot write embedded archive {:?}: {e}", path);

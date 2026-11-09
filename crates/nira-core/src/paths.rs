@@ -70,6 +70,96 @@ fn xdg_dir(var: &str, fallback: &str) -> PathBuf {
         .join("nira")
 }
 
+/// This run's private folder for unpacked archives (compressed tars,
+/// archives inside archives): `cache_dir()/unpack/<pid>`, mode 0700 on Unix.
+/// It is under the cache rather than the system temp folder, which is often
+/// RAM-backed and shared by every account. Falls back to the temp folder if
+/// the cache can't be written.
+pub fn unpack_dir() -> PathBuf {
+    let dir = unpack_root().join(std::process::id().to_string());
+    match create_private_dir(&dir) {
+        Ok(()) => dir,
+        Err(e) => {
+            let fallback = std::env::temp_dir().join(format!("nira-unpack-{}", std::process::id()));
+            log::warn!(
+                "cannot create {}: {e}; using {}",
+                dir.display(),
+                fallback.display()
+            );
+            if let Err(e) = create_private_dir(&fallback) {
+                log::warn!("cannot create {}: {e}", fallback.display());
+            }
+            fallback
+        }
+    }
+}
+
+fn unpack_root() -> PathBuf {
+    if cfg!(test) {
+        // Keep unit tests out of the user's real cache.
+        std::env::temp_dir().join("nira-test-unpack")
+    } else {
+        cache_dir().join("unpack")
+    }
+}
+
+fn create_private_dir(dir: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir)?;
+        // An existing folder keeps its mode through `create`; tighten it.
+        fs::set_permissions(dir, fs::Permissions::from_mode(0o700))
+    }
+    #[cfg(not(unix))]
+    {
+        fs::create_dir_all(dir)
+    }
+}
+
+/// Remove the unpack folders of runs that are no longer running (left
+/// behind by a crash). Each run removes its own files as books close.
+pub fn remove_stale_unpack_dirs() {
+    let Ok(entries) = fs::read_dir(unpack_root()) else {
+        return;
+    };
+    let me = std::process::id();
+    for entry in entries.flatten() {
+        let Some(pid) = entry
+            .file_name()
+            .to_str()
+            .and_then(|n| n.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        if pid == me || run_is_alive(pid, &entry.path()) {
+            continue;
+        }
+        match fs::remove_dir_all(entry.path()) {
+            Ok(()) => log::debug!("removed stale {}", entry.path().display()),
+            Err(e) => log::warn!("cannot remove {}: {e}", entry.path().display()),
+        }
+    }
+}
+
+/// Whether the run that made `dir` may still be using it.
+fn run_is_alive(pid: u32, dir: &Path) -> bool {
+    if cfg!(target_os = "linux") {
+        return Path::new("/proc").join(pid.to_string()).exists();
+    }
+    // Elsewhere there is no cheap process check: treat folders untouched
+    // for a day as abandoned.
+    const DAY: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+    fs::metadata(dir)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_none_or(|age| age < DAY)
+}
+
 /// Write `text` to `path`, creating its directory first. Failures are
 /// logged, not returned: losing a settings write must not stop the app.
 ///
@@ -145,6 +235,28 @@ mod tests {
             .collect();
         names.sort();
         names
+    }
+
+    #[test]
+    fn the_unpack_dir_is_private_and_stale_runs_are_removed() {
+        let dir = unpack_dir();
+        assert!(dir.is_dir());
+        assert!(dir.ends_with(std::process::id().to_string()));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&dir).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o700);
+        }
+        // A pid that can't be running (above Linux's pid_max).
+        let stale = unpack_root().join("4294967295");
+        fs::create_dir_all(stale.join("sub")).unwrap();
+        if cfg!(target_os = "linux") {
+            remove_stale_unpack_dirs();
+            assert!(!stale.exists());
+            assert!(dir.is_dir(), "this run's folder is kept");
+        }
+        let _ = fs::remove_dir_all(&stale);
     }
 
     #[test]
