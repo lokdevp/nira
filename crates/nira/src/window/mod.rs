@@ -550,8 +550,13 @@ impl NiraWindow {
         if w <= 0 || h <= 0 || self.is_fullscreen() || self.is_maximized() {
             return;
         }
-        let window = &self.imp_settings().window;
-        if (window.width, window.height) != (w, h) {
+        // Copy the saved size out so the settings borrow ends before
+        // `update_settings` borrows them mutably.
+        let saved = {
+            let s = self.imp_settings();
+            (s.window.width, s.window.height)
+        };
+        if saved != (w, h) {
             self.update_settings(|s| {
                 s.window.width = w;
                 s.window.height = h;
