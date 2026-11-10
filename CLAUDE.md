@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Nira is a comic book and manga viewer in Rust and GTK4 (`gtk4-rs` 0.9, GTK ≥ 4.12). Version 0.5 is a rebuild: the tested non-GTK code was carried over, the UI is being rewritten, and the config formats are new.
+Nira is a comic book and manga viewer in Rust and GTK4 (`gtk4-rs` 0.9, GTK ≥ 4.12). Version 1.0 is a rebuild: the tested non-GTK code was carried over, the UI is being rewritten, and the config formats are new.
 
 The old app (0.4.2) is the feature reference while the UI is ported. The UI follows the user's Claude Design "Comic Reader Wireframe" (artifact `b28c8b19-6499-4805-a57c-8dfffde087c8`; boards `project/Main.dc.html`, `Focus.dc.html`, `Welcome.dc.html`, `Preferences.dc.html`, `About.dc.html`). That design is the spec for look and layout; the old app's `app/chrome.rs` and `style.css` were built from it and are only a GTK reference. Done: open and turn pages, fit/zoom/smart scroll, the whole design (title bar, toolbar, page bar, View panel with auto-enhance, page sidebar and bookmarks, focus mode, start screen with history, sibling books, magnifying lens), the preferences dialog with the keybinding editor, rotation, Go to page and the About dialog (opened from the View panel). Left out on purpose: a library (the design has none; the start screen's history replaces it) and the original design's Scroll layout, per-file view settings and shortcuts overlay (since removed from the design). Decide each quirk of the old app on its own merits rather than copying it.
 
@@ -43,5 +43,5 @@ To look at the UI without a desktop, run it on Broadway: start `gtk4-broadwayd :
 
 ## Release workflow
 
-- Develop on a branch and merge into `main` with `--no-ff`. Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the .deb, tarball, AppImage and Windows zip/installer, runs `cargo test --workspace --release`, and creates a draft release.
-- The version is `[workspace.package] version` in the root `Cargo.toml`. After a release is published, update `pkgver` in `packaging/arch/PKGBUILD` and run `updkgsums`.
+- Develop on a branch and merge into `main` with `--no-ff`. Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the .deb, tarball, AppImage and Windows zip/installer and runs `cargo test --workspace --release`. The draft release it creates holds only the Linux files (.deb, tarball, AppImage) and a `SHA256SUMS`; the Windows zip/installer are only run artifacts until Windows is tested.
+- The version is `[workspace.package] version` in the root `Cargo.toml`. After a release is published, update `pkgver` in `packaging/arch/PKGBUILD` and run `updpkgsums`.
