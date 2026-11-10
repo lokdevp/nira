@@ -226,30 +226,6 @@ pub fn auto_enhance(img: RgbaImage) -> RgbaImage {
     imageops::unsharpen(&out, 0.8, 4)
 }
 
-/// The `w x h` region of a `full_w x full_h` RGBA8 image whose top-left
-/// corner is at (`x`, `y`), which may lie partly or wholly outside the
-/// image; pixels outside are transparent.
-pub fn crop_rgba(full: &[u8], full_w: u32, full_h: u32, x: i64, y: i64, w: u32, h: u32) -> Vec<u8> {
-    let mut out = vec![0u8; (w as usize) * (h as usize) * 4];
-    let (fw, fh) = (full_w as i64, full_h as i64);
-    let x0 = x.max(0);
-    let x1 = (x + w as i64).min(fw);
-    if x1 <= x0 || full.len() < (fw * fh * 4) as usize {
-        return out;
-    }
-    let row_bytes = ((x1 - x0) * 4) as usize;
-    for row in 0..h as i64 {
-        let sy = y + row;
-        if sy < 0 || sy >= fh {
-            continue;
-        }
-        let src = ((sy * fw + x0) * 4) as usize;
-        let dst = ((row * w as i64 + (x0 - x)) * 4) as usize;
-        out[dst..dst + row_bytes].copy_from_slice(&full[src..src + row_bytes]);
-    }
-    out
-}
-
 /// The average colour of an image's border (`w x h` RGBA8 pixels): the
 /// background that blends with the page.
 pub fn edge_colour(w: u32, h: u32, rgba: &[u8]) -> Option<[u8; 3]> {
@@ -373,22 +349,6 @@ mod tests {
         assert_eq!(cw.get_pixel(0, 0)[0], 255);
         let ccw = transform(img, 270, false, false);
         assert_eq!(ccw.get_pixel(0, 1)[0], 255);
-    }
-
-    #[test]
-    fn crop_copies_inside_and_clears_outside() {
-        // 3x2 image, pixel value = index.
-        let full: Vec<u8> = (0..6u8).flat_map(|i| [i, i, i, 255]).collect();
-        assert_eq!(
-            crop_rgba(&full, 3, 2, 1, 0, 2, 2),
-            [1, 1, 1, 255, 2, 2, 2, 255, 4, 4, 4, 255, 5, 5, 5, 255]
-        );
-        // Hanging off the top-left corner: the outside is transparent.
-        let c = crop_rgba(&full, 3, 2, -1, -1, 2, 2);
-        assert_eq!(&c[..12], &[0; 12]);
-        assert_eq!(&c[12..], &[0, 0, 0, 255]);
-        // Wholly outside.
-        assert!(crop_rgba(&full, 3, 2, 10, 10, 2, 2).iter().all(|&b| b == 0));
     }
 
     #[test]

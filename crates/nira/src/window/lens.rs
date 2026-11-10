@@ -1,20 +1,16 @@
-//! The magnifying lens: an enlarged crop of the full-resolution page under
-//! the pointer. The wheel changes the magnification while it is on.
+//! The magnifying lens: the full-resolution page under the pointer,
+//! enlarged. The wheel changes the magnification while it is on.
 
 use std::cell::Cell;
 use std::time::Duration;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gdk, glib};
-use nira_core::i18n::t_args;
-use nira_core::image_loader::crop_rgba;
-use nira_core::reader::SlotImage;
+use gtk::glib;
 use nira_core::settings::{LENS_MAX, LENS_MIN, LENS_STEP};
 
 use super::NiraWindow;
 use crate::chrome::lens::LensView;
-use crate::texture::{self, SizedPaintable};
 
 impl NiraWindow {
     /// Put the lens over the reading area `overlay`.
@@ -47,7 +43,7 @@ impl NiraWindow {
         }
         if !on {
             if let Some(lens) = imp.lens.get() {
-                lens.hide();
+                lens.clear();
             }
         } else {
             let (x, y) = imp.pointer.get();
@@ -92,27 +88,13 @@ impl NiraWindow {
         };
         // Full-resolution pixels per screen pixel.
         let scale = fw as f64 / bounds.width() as f64;
-        let side = ((size as f64 / mag) * scale).round().max(1.0) as u32;
-        let cx = (x - bounds.x() as f64) * scale;
-        let cy = (y - bounds.y() as f64) * scale;
-        let rgba = crop_rgba(
-            &px,
-            fw,
-            fh,
-            (cx - side as f64 / 2.0).round() as i64,
-            (cy - side as f64 / 2.0).round() as i64,
-            side,
-            side,
+        lens.set_page(fw, fh, px);
+        lens.area.set_view(
+            ((x - bounds.x() as f64) * scale) as f32,
+            ((y - bounds.y() as f64) * scale) as f32,
+            (mag / scale) as f32,
         );
-        let tex: gdk::Texture = texture::from_slot_image(SlotImage::Scaled {
-            w: side,
-            h: side,
-            rgba,
-        });
-        lens.picture
-            .set_paintable(Some(&SizedPaintable::new(&tex, size, size)));
-        lens.label
-            .set_text(&t_args("lens-label", &[("zoom", format!("{mag}").into())]));
+        lens.set_magnification(mag);
         lens.place(x, y, size, overlay.width(), overlay.height());
     }
 
