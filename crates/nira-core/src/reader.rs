@@ -227,6 +227,9 @@ impl Reader {
         self.prefetch_queue.clear();
         self.prefetching = false;
         self.scale_pending = None;
+        // A rescale in flight is of the forgotten pixels: its result must
+        // not be painted.
+        self.scale_req += 1;
     }
 
     /// Keep up to `pages` decoded pages in memory (drops the cache).
@@ -768,5 +771,27 @@ mod tests {
             panic!("expected scaled pixels");
         };
         assert_eq!((*w, *h), frame.sizes[0]);
+    }
+
+    #[test]
+    fn a_rescale_from_before_an_invalidation_is_dropped() {
+        let mut r = open("double-pages-test.cbz", View::default());
+        run(&mut r);
+        r.set_viewport((100.0, 100.0));
+        r.frame();
+        let cmds = r.take_commands();
+        let Some(WorkerCmd::Rescale(cmd)) = cmds
+            .into_iter()
+            .find(|c| matches!(c, WorkerCmd::Rescale(_)))
+        else {
+            panic!("expected a rescale");
+        };
+        // Rotation or enhancement changed while the rescale was running.
+        r.invalidate();
+        let stale = r.on_result(WorkerResult::Rescaled(rescale_pages(cmd)));
+        assert!(stale.is_none(), "the old pixels were painted");
+        // The fresh decode still arrives and is drawn.
+        let frames = run(&mut r);
+        assert!(frames.iter().any(|f| !f.updates.is_empty()));
     }
 }
