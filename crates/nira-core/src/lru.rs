@@ -65,6 +65,71 @@ impl<K: Eq + Hash + Clone, V> LruCache<K, V> {
         self.evict();
     }
 
+    /// Insert an entry, evicting only entries `keep` doesn't hold,
+    /// least recently used first. Kept entries may leave the cache over
+    /// its limits (the pages on screen must stay).
+    pub fn put_keeping(&mut self, key: K, value: V, bytes: usize, keep: impl Fn(&K) -> bool) {
+        self.remove(&key);
+        self.map.insert(key.clone(), (value, bytes));
+        self.order.push_back(key.clone());
+        self.bytes = self.bytes.saturating_add(bytes);
+        let victims: Vec<K> = self
+            .order
+            .iter()
+            .filter(|k| **k != key && !keep(k))
+            .cloned()
+            .collect();
+        for k in victims {
+            if !self.over_limits() {
+                break;
+            }
+            self.remove(&k);
+        }
+    }
+
+    /// Insert an entry if evicting entries `may_evict` allows (least
+    /// recently used first) makes room for it. Otherwise change nothing
+    /// and return false.
+    pub fn put_if_room(
+        &mut self,
+        key: K,
+        value: V,
+        bytes: usize,
+        may_evict: impl Fn(&K) -> bool,
+    ) -> bool {
+        let old = self.map.get(&key).map(|(_, b)| *b);
+        let count = self.map.len() + usize::from(old.is_none());
+        let total = (self.bytes - old.unwrap_or(0)).saturating_add(bytes);
+        let mut over_count = count.saturating_sub(self.capacity);
+        let mut over_bytes = total.saturating_sub(self.max_bytes);
+        let mut victims = Vec::new();
+        for k in &self.order {
+            if over_count == 0 && over_bytes == 0 {
+                break;
+            }
+            if *k != key && may_evict(k) {
+                over_count = over_count.saturating_sub(1);
+                over_bytes = over_bytes.saturating_sub(self.map[k].1);
+                victims.push(k.clone());
+            }
+        }
+        if over_count > 0 || over_bytes > 0 {
+            return false;
+        }
+        for k in victims {
+            self.remove(&k);
+        }
+        self.remove(&key);
+        self.map.insert(key.clone(), (value, bytes));
+        self.order.push_back(key);
+        self.bytes = self.bytes.saturating_add(bytes);
+        true
+    }
+
+    fn over_limits(&self) -> bool {
+        self.map.len() > self.capacity || self.bytes > self.max_bytes
+    }
+
     pub fn remove(&mut self, key: &K) -> Option<V> {
         if let Some((value, bytes)) = self.map.remove(key) {
             self.bytes = self.bytes.saturating_sub(bytes);
@@ -130,6 +195,36 @@ mod tests {
         c.put(2, "y", 6);
         // total 12 > 10 -> evicts one
         assert_eq!(c.map.len(), 1);
+    }
+
+    #[test]
+    fn put_keeping_never_evicts_kept_entries() {
+        let mut c = LruCache::new(10, 10);
+        c.put(1, "shown", 6);
+        c.put_keeping(2, "next", 6, |k| *k == 1);
+        // Over budget, but the kept entry stays and the newcomer is in.
+        assert!(c.contains(&1) && c.contains(&2));
+        c.put_keeping(3, "more", 3, |k| *k == 1);
+        assert!(c.contains(&1) && !c.contains(&2) && c.contains(&3));
+    }
+
+    #[test]
+    fn put_if_room_only_evicts_what_it_may() {
+        let mut c = LruCache::new(10, 10);
+        c.put(1, "a", 4);
+        c.put(2, "b", 4);
+        // Needs 2 bytes freed; only entry 2 may go.
+        assert!(c.put_if_room(3, "c", 4, |k| *k == 2));
+        assert!(c.contains(&1) && !c.contains(&2) && c.contains(&3));
+        // No room and nothing may go: unchanged.
+        assert!(!c.put_if_room(4, "d", 4, |_| false));
+        assert!(!c.contains(&4) && c.bytes == 8);
+        // The count limit counts too.
+        let mut c = LruCache::new(1, 100);
+        c.put(1, "a", 1);
+        assert!(!c.put_if_room(2, "b", 1, |_| false));
+        assert!(c.put_if_room(2, "b", 1, |_| true));
+        assert!(!c.contains(&1) && c.contains(&2));
     }
 
     #[test]

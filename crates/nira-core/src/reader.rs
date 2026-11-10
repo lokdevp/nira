@@ -111,6 +111,8 @@ pub struct Reader {
     file_bytes: HashMap<usize, u64>,
     cache: LruCache<usize, (u32, u32, Pixels)>,
     cache_pages: usize,
+    /// The pages to keep cached, most wanted first (`update_cache_window`).
+    wanted: Vec<usize>,
     shown: Vec<Option<Shown>>,
     commands: Vec<WorkerCmd>,
     /// Bumped per opened book.
@@ -143,6 +145,7 @@ impl Reader {
             file_bytes: HashMap::new(),
             cache: LruCache::new(cache_pages, CACHE_BYTES),
             cache_pages,
+            wanted: Vec::new(),
             shown: Vec::new(),
             commands: Vec::new(),
             gen: 0,
@@ -225,6 +228,7 @@ impl Reader {
         self.cache.clear();
         self.shown.clear();
         self.prefetch_queue.clear();
+        self.wanted.clear();
         self.prefetching = false;
         self.scale_pending = None;
         // A rescale in flight is of the forgotten pixels: its result must
@@ -394,7 +398,11 @@ impl Reader {
         }
         if !res.display {
             for p in res.pages {
-                self.cache_page(&p);
+                if !self.cache_prefetched(&p) {
+                    // The cache is full of pages wanted more: the rest of
+                    // the window, wanted less, would not fit either.
+                    self.prefetch_queue.clear();
+                }
             }
             self.prefetching = false;
             self.pump_prefetch();
@@ -474,12 +482,46 @@ impl Reader {
         frame
     }
 
+    /// Cache a page decoded for display. Only the pages on screen are
+    /// sure to stay.
     fn cache_page(&mut self, p: &DecodedPage) {
+        let bytes = self.note_page(p);
+        let spread = self.spread();
+        self.cache
+            .put_keeping(p.idx, (p.full_w, p.full_h, p.full.clone()), bytes, |k| {
+                spread.contains(k)
+            });
+    }
+
+    /// Cache a prefetched page if there is room, making it only by
+    /// evicting pages wanted less (never the ones on screen). False if it
+    /// didn't fit.
+    fn cache_prefetched(&mut self, p: &DecodedPage) -> bool {
+        let bytes = self.note_page(p);
+        let spread = self.spread();
+        let wanted = &self.wanted;
+        let rank = |k: &usize| -> usize {
+            if spread.contains(k) {
+                0
+            } else {
+                wanted
+                    .iter()
+                    .position(|w| w == k)
+                    .map_or(usize::MAX, |i| i + 1)
+            }
+        };
+        let mine = rank(&p.idx);
+        self.cache
+            .put_if_room(p.idx, (p.full_w, p.full_h, p.full.clone()), bytes, |k| {
+                rank(k) > mine
+            })
+    }
+
+    /// Record a decoded page's sizes; its size in memory.
+    fn note_page(&mut self, p: &DecodedPage) -> usize {
         self.dims.insert(p.idx, (p.full_w, p.full_h));
         self.file_bytes.insert(p.idx, p.file_bytes);
-        let bytes = (p.full_w as usize) * (p.full_h as usize) * 4;
-        self.cache
-            .put(p.idx, (p.full_w, p.full_h, p.full.clone()), bytes);
+        (p.full_w as usize) * (p.full_h as usize) * 4
     }
 
     fn frame_layout(&self, spread: &[usize]) -> Frame {
@@ -610,9 +652,11 @@ impl Reader {
         self.cache
             .retain(|k| wanted.contains(k) || spread.contains(k));
         self.prefetch_queue = wanted
-            .into_iter()
+            .iter()
+            .copied()
             .filter(|i| !self.cache.contains(i))
             .collect();
+        self.wanted = wanted;
         self.pump_prefetch();
     }
 
@@ -771,6 +815,39 @@ mod tests {
             panic!("expected scaled pixels");
         };
         assert_eq!((*w, *h), frame.sizes[0]);
+    }
+
+    #[test]
+    fn a_full_cache_keeps_the_shown_page_and_its_neighbours() {
+        let mut r = open("double-pages-test.cbz", View::default());
+        // The fixture pages are 210x297: room for three of them, while the
+        // prefetch window asks for seven.
+        let page_bytes = 210 * 297 * 4;
+        r.cache = LruCache::new(7, page_bytes * 3 + page_bytes / 2);
+        let mut decodes = 0;
+        loop {
+            let cmds = r.take_commands();
+            if cmds.is_empty() {
+                break;
+            }
+            for cmd in cmds {
+                let WorkerCmd::Decode(cmd) = cmd else {
+                    continue;
+                };
+                decodes += 1;
+                let mut ar = crate::archive::open(&cmd.path).ok();
+                r.on_result(WorkerResult::Decoded(decode_pages(ar.as_mut(), &cmd)));
+            }
+        }
+        // The page on screen and the nearest ones stay, the far ones were
+        // never squeezed in.
+        assert!(r.cache.contains(&0) && r.cache.contains(&1) && r.cache.contains(&2));
+        assert!(!r.cache.contains(&3));
+        // Prefetching stopped at the first page that didn't fit.
+        assert_eq!(decodes, 4);
+        // So the next page needs no decode.
+        assert_eq!(r.flip(true, 1), Flip::Moved);
+        assert!(!r.is_loading());
     }
 
     #[test]
