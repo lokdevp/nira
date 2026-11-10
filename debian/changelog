@@ -1,10 +1,10 @@
-nira (0.5.0-1) unstable; urgency=low
+nira (1.0.0-1) unstable; urgency=low
 
   * Rebuilt as a Cargo workspace (nira-core + nira). Settings move to
     settings.toml and keys.toml; old preferences.conf and keybindings.conf
     are no longer read.
 
- -- lokesh <lokdevp@gmail.com>  Sat, 31 Oct 2026 00:00:00 +0530
+ -- lokesh <lokdevp@gmail.com>  Tue, 10 Nov 2026 00:00:00 +0530
 
 nira (0.4.2-1) unstable; urgency=low
 
