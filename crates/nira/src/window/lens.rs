@@ -1,6 +1,9 @@
 //! The magnifying lens: an enlarged crop of the full-resolution page under
 //! the pointer. The wheel changes the magnification while it is on.
 
+use std::cell::Cell;
+use std::time::Duration;
+
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
@@ -36,6 +39,7 @@ impl NiraWindow {
     pub(super) fn set_lens(&self, on: bool) {
         let imp = self.imp();
         imp.lens_on.set(on);
+        imp.lens_wheel_acc.set(0.0);
         self.set_action_state("lens", on.to_variant());
         let overlay = imp.scrolled.parent();
         if let Some(overlay) = overlay {
@@ -112,18 +116,102 @@ impl NiraWindow {
         lens.place(x, y, size, overlay.width(), overlay.height());
     }
 
-    /// The wheel while the lens is on changes its magnification. True if
+    /// The wheel while the lens is on changes its magnification: one step
+    /// per wheel notch, or per notch's worth of touchpad movement. True if
     /// the wheel was used for that.
     pub(super) fn lens_wheel(&self, dy: f64) -> bool {
-        if !self.imp().lens_on.get() || dy == 0.0 {
+        let imp = self.imp();
+        if !imp.lens_on.get() {
             return false;
         }
-        let step = if dy < 0.0 { LENS_STEP } else { -LENS_STEP };
-        self.update_settings(|s| {
-            s.lens.magnification = (s.lens.magnification + step).clamp(LENS_MIN, LENS_MAX);
-        });
-        let (x, y) = self.imp().pointer.get();
-        self.update_lens(x, y);
+        let Some(notches) = take_notches(&imp.lens_wheel_acc, dy) else {
+            return true;
+        };
+        let changed = {
+            let mut settings = imp.settings.borrow_mut();
+            let old = settings.lens.magnification;
+            let new = (old - notches * LENS_STEP).clamp(LENS_MIN, LENS_MAX);
+            settings.lens.magnification = new;
+            new != old
+        };
+        if changed {
+            self.schedule_lens_save();
+            let (x, y) = imp.pointer.get();
+            self.update_lens(x, y);
+        }
         true
+    }
+
+    /// Save the magnification once the wheel has been still for a moment,
+    /// rather than on every step.
+    fn schedule_lens_save(&self) {
+        let imp = self.imp();
+        if let Some(id) = imp.lens_save.take() {
+            id.remove();
+        }
+        let id = glib::timeout_add_local_once(
+            LENS_SAVE_DELAY,
+            glib::clone!(
+                #[weak(rename_to = win)]
+                self,
+                move || {
+                    win.imp().lens_save.take();
+                    win.update_settings(|_| {});
+                }
+            ),
+        );
+        imp.lens_save.replace(Some(id));
+    }
+
+    /// Save a magnification change still waiting for its delay (on close).
+    pub(super) fn flush_lens_save(&self) {
+        if let Some(id) = self.imp().lens_save.take() {
+            id.remove();
+            self.update_settings(|_| {});
+        }
+    }
+}
+
+/// How long the wheel must be still before the magnification is saved.
+const LENS_SAVE_DELAY: Duration = Duration::from_millis(500);
+
+/// Add `dy` (in wheel notches) to the movement in `acc` and take out the
+/// whole notches, keeping the remainder. Turning the other way starts
+/// afresh, so a reversal acts at once. `None` until a whole notch.
+fn take_notches(acc: &Cell<f64>, dy: f64) -> Option<f64> {
+    let prev = acc.get();
+    let total = if prev * dy < 0.0 { dy } else { prev + dy };
+    let notches = total.trunc();
+    acc.set(total - notches);
+    (notches != 0.0).then_some(notches)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wheel_notches_step_at_once() {
+        let acc = Cell::new(0.0);
+        assert_eq!(take_notches(&acc, -1.0), Some(-1.0));
+        assert_eq!(take_notches(&acc, 2.0), Some(2.0));
+        assert_eq!(acc.get(), 0.0);
+    }
+
+    #[test]
+    fn small_deltas_add_up_to_a_notch() {
+        let acc = Cell::new(0.0);
+        let steps: Vec<_> = (0..10).filter_map(|_| take_notches(&acc, 0.25)).collect();
+        assert_eq!(steps, [1.0, 1.0]);
+        assert!((acc.get() - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn reversing_drops_the_remainder() {
+        let acc = Cell::new(0.0);
+        assert_eq!(take_notches(&acc, 0.75), None);
+        assert_eq!(take_notches(&acc, -0.5), None);
+        assert!((acc.get() + 0.5).abs() < 1e-9);
+        assert_eq!(take_notches(&acc, 0.0), None);
     }
 }

@@ -67,6 +67,11 @@ mod imp {
         pub pagebar: OnceCell<PageBar>,
         pub lens: OnceCell<LensView>,
         pub lens_on: Cell<bool>,
+        /// Wheel movement not yet worth a whole magnification step
+        /// (touchpads send many small deltas).
+        pub lens_wheel_acc: Cell<f64>,
+        /// Pending save of the lens magnification.
+        pub lens_save: RefCell<Option<glib::SourceId>>,
         /// The keys in use (edited in the preferences).
         pub keymap: RefCell<Keymap>,
         /// The keybinding editor's list, while the preferences are open.
@@ -159,6 +164,7 @@ mod imp {
         fn close_request(&self) -> glib::Propagation {
             let win = self.obj();
             win.save_window_size();
+            win.flush_lens_save();
             win.flush_persister();
             self.parent_close_request()
         }
