@@ -17,10 +17,11 @@ use crate::natsort;
 
 /// All supported image file extensions (subset of what Pillow + GTK understand).
 /// Only formats enabled in the `image` crate's features belong here (no PCX:
-/// the crate can't decode it).
+/// the crate can't decode it), plus JPEG 2000, which `image_loader` decodes
+/// with `hayro-jpeg2000`.
 pub const IMAGE_EXTENSIONS: &[&str] = &[
     "jpg", "jpeg", "png", "gif", "bmp", "webp", "tif", "tiff", "ico", "ppm", "pbm", "pgm", "pnm",
-    "tga", "qoi",
+    "tga", "qoi", "jp2", "j2k", "jpf", "jpx", "j2c", "jpc",
 ];
 
 /// Extensions of archives (and PDFs) that may sit inside a book.
@@ -400,6 +401,14 @@ impl Archive for DirArchive {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn jpeg2000_pages_are_images() {
+        for name in ["Vol 1/p_0001.jp2", "a.JP2", "b.j2k", "c.jpx", "d.jpc"] {
+            assert!(is_image_file(name), "{name}");
+        }
+        assert!(!is_image_file("notes.jp"));
+    }
 
     #[test]
     fn reads_are_capped() {
