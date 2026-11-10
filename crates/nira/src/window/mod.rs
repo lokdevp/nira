@@ -79,6 +79,9 @@ mod imp {
         pub key_rows: RefCell<Vec<keys::KeyRow>>,
         /// The action waiting for a key press in the editor.
         pub capturing: Cell<Option<nira_core::keymap::Action>>,
+        /// A fixed key pressed while capturing, shown so it can be
+        /// replaced.
+        pub refused_key: RefCell<Option<String>>,
         /// The page each picture shows (screen order).
         pub pic_pages: RefCell<[Option<usize>; 2]>,
         pub welcome: OnceCell<Welcome>,

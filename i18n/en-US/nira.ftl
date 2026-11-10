@@ -219,6 +219,7 @@ prefs-cached-pages = Decoded pages kept in memory
 
 keys-hint = Press + and then the new key. A key used by another action moves to this one.
 keys-press = Press a key… (Esc cancels)
+keys-fixed = { $key } can't be changed. Press another key… (Esc cancels)
 keys-add = Add a key
 keys-clear = Remove all keys
 keys-reset = Restore the default keys
