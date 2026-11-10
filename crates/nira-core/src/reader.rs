@@ -255,12 +255,14 @@ impl Reader {
         self.scale_req += 1;
     }
 
-    /// Keep up to `pages` decoded pages in memory (drops the cache).
+    /// Keep up to `pages` decoded pages in memory. The pages already
+    /// cached stay, as many as fit (the shown ones always).
     pub fn set_cache_pages(&mut self, pages: u32) {
         let pages = pages.max(1) as usize;
         if pages != self.cache_pages {
             self.cache_pages = pages;
-            self.cache = LruCache::new(pages, CACHE_BYTES);
+            let spread = self.spread();
+            self.cache.set_capacity(pages, |k| spread.contains(k));
             self.update_cache_window();
         }
     }
@@ -970,6 +972,31 @@ mod tests {
         assert_eq!(drawn.failed, vec![1]);
         assert!(r.cache.contains(&0));
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn changing_the_cache_size_keeps_the_cached_pages() {
+        let mut r = open("double-pages-test.cbz", View::default());
+        run(&mut r);
+        let cached: Vec<usize> = (0..r.page_count())
+            .filter(|i| r.cache.contains(i))
+            .collect();
+        assert!(cached.len() > 1);
+        // Growing keeps every page and decodes only the new ones.
+        r.set_cache_pages(9);
+        for cmd in r.take_commands() {
+            if let WorkerCmd::Decode(cmd) = cmd {
+                assert!(
+                    cmd.indices.iter().all(|i| !cached.contains(i)),
+                    "{:?} was decoded again",
+                    cmd.indices
+                );
+            }
+        }
+        assert!(cached.iter().all(|i| r.cache.contains(i)));
+        // Shrinking to one page keeps the shown one.
+        r.set_cache_pages(1);
+        assert!(r.cache.contains(&r.page()));
     }
 
     #[test]

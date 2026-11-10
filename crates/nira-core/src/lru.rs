@@ -73,12 +73,20 @@ impl<K: Eq + Hash + Clone, V> LruCache<K, V> {
         self.map.insert(key.clone(), (value, bytes));
         self.order.push_back(key.clone());
         self.bytes = self.bytes.saturating_add(bytes);
-        let victims: Vec<K> = self
-            .order
-            .iter()
-            .filter(|k| **k != key && !keep(k))
-            .cloned()
-            .collect();
+        self.trim(|k| *k == key || keep(k));
+    }
+
+    /// Hold at most `capacity` entries from now on, evicting the least
+    /// recently used ones `keep` doesn't hold if there are too many.
+    pub fn set_capacity(&mut self, capacity: usize, keep: impl Fn(&K) -> bool) {
+        self.capacity = capacity.max(1);
+        self.trim(keep);
+    }
+
+    /// Evict entries `keep` doesn't hold, least recently used first, until
+    /// the cache is within its limits (or only kept entries are left).
+    fn trim(&mut self, keep: impl Fn(&K) -> bool) {
+        let victims: Vec<K> = self.order.iter().filter(|k| !keep(k)).cloned().collect();
         for k in victims {
             if !self.over_limits() {
                 break;
@@ -206,6 +214,23 @@ mod tests {
         assert!(c.contains(&1) && c.contains(&2));
         c.put_keeping(3, "more", 3, |k| *k == 1);
         assert!(c.contains(&1) && !c.contains(&2) && c.contains(&3));
+    }
+
+    #[test]
+    fn set_capacity_keeps_entries_when_growing_and_evicts_lru_when_shrinking() {
+        let mut c = LruCache::new(3, 1000);
+        c.put(1, "a", 1);
+        c.put(2, "b", 1);
+        c.put(3, "c", 1);
+        c.set_capacity(5, |_| false);
+        assert!(c.contains(&1) && c.contains(&2) && c.contains(&3));
+        c.put(4, "d", 1);
+        assert_eq!(c.map.len(), 4, "the larger capacity is used");
+        let _ = c.get(&1);
+        // Shrinking evicts the least recently used, but never a kept one.
+        c.set_capacity(2, |k| *k == 2);
+        assert!(c.contains(&2) && c.contains(&1));
+        assert!(!c.contains(&3) && !c.contains(&4));
     }
 
     #[test]
