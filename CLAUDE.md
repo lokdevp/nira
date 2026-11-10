@@ -43,5 +43,5 @@ To look at the UI without a desktop, run it on Broadway: start `gtk4-broadwayd :
 
 ## Release workflow
 
-- Develop on a branch and merge into `main` with `--no-ff`. Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the .deb, tarball, AppImage and Windows zip/installer and runs `cargo test --workspace --release`. The draft release it creates holds only the Linux files (.deb, tarball, AppImage) and a `SHA256SUMS`; the Windows zip/installer are only run artifacts until Windows is tested.
+- Keep history linear: no merge commits. Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the .deb, tarball, AppImage and Windows zip/installer and runs `cargo test --workspace --release`. The draft release it creates holds only the Linux files (.deb, tarball, AppImage) and a `SHA256SUMS`; the Windows zip/installer are only run artifacts until Windows is tested.
 - The version is `[workspace.package] version` in the root `Cargo.toml`. After a release is published, update `pkgver` in `packaging/arch/PKGBUILD` and run `updpkgsums`.
