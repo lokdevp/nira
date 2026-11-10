@@ -4,9 +4,9 @@
 use std::cell::Cell;
 use std::time::Duration;
 
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::glib;
 use nira_core::settings::{LENS_MAX, LENS_MIN, LENS_STEP};
 
 use super::NiraWindow;

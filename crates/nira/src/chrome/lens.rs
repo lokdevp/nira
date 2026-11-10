@@ -109,9 +109,12 @@ impl LensView {
         set_if(&self.root, top, gtk::Widget::margin_top, |w, v| {
             w.set_margin_top(v)
         });
-        set_if(&self.label, left + size / 4, gtk::Widget::margin_start, |w, v| {
-            w.set_margin_start(v)
-        });
+        set_if(
+            &self.label,
+            left + size / 4,
+            gtk::Widget::margin_start,
+            |w, v| w.set_margin_start(v),
+        );
         set_if(&self.label, label_top, gtk::Widget::margin_top, |w, v| {
             w.set_margin_top(v)
         });

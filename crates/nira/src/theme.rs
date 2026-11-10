@@ -260,9 +260,7 @@ async fn watch_portal() {
         gio::DBusSignalFlags::NONE,
         |_, _, _, _, _, params| {
             // (namespace, key, value): the new value comes with the signal.
-            if params.n_children() == 3
-                && params.child_value(1).str() == Some(COLOR_SCHEME_KEY)
-            {
+            if params.n_children() == 3 && params.child_value(1).str() == Some(COLOR_SCHEME_KEY) {
                 if let Some(scheme) = unwrap_u32(params.child_value(2)) {
                     set_portal_scheme(scheme);
                 }

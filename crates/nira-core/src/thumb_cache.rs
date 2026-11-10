@@ -95,7 +95,11 @@ fn load_in(dir: &Path, key: u64) -> Option<(u32, u32, Vec<u8>)> {
 pub fn store(path: &Path, page: usize, w: u32, h: u32, rgba: &[u8]) {
     let key = key(path, mtime_nanos(path), page);
     if let Err(e) = store_in(&cache_dir(), key, w, h, rgba) {
-        log::debug!("cannot cache thumbnail {} of {}: {e}", page + 1, path.display());
+        log::debug!(
+            "cannot cache thumbnail {} of {}: {e}",
+            page + 1,
+            path.display()
+        );
     }
 }
 
@@ -104,7 +108,10 @@ fn store_in(dir: &Path, key: u64, w: u32, h: u32, rgba: &[u8]) -> io::Result<()>
         .checked_mul(h as usize)
         .and_then(|n| n.checked_mul(4));
     if expected != Some(rgba.len()) || w == 0 || h == 0 {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "bad pixel buffer"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "bad pixel buffer",
+        ));
     }
     let mut png = Vec::new();
     PngEncoder::new_with_quality(&mut png, CompressionType::Fast, FilterType::Adaptive)
@@ -192,7 +199,9 @@ mod tests {
     }
 
     fn pixels(w: u32, h: u32, seed: u8) -> Vec<u8> {
-        (0..w * h * 4).map(|i| (i as u8).wrapping_mul(seed)).collect()
+        (0..w * h * 4)
+            .map(|i| (i as u8).wrapping_mul(seed))
+            .collect()
     }
 
     fn set_age(path: &Path, secs_ago: u64) {
@@ -283,7 +292,9 @@ mod tests {
         // Over it: trimmed to TRIM_TO of the cap, oldest first.
         let cap = total / 2;
         prune_dir(&dir, cap);
-        let left: Vec<u64> = (0..10).filter(|&k| dir.join(file_name(k)).exists()).collect();
+        let left: Vec<u64> = (0..10)
+            .filter(|&k| dir.join(file_name(k)).exists())
+            .collect();
         let left_total: u64 = left.iter().map(|&k| size(k)).sum();
         assert!(left_total <= (cap as f64 * TRIM_TO) as u64);
         assert!(left.contains(&0) && left.contains(&9), "kept {left:?}");
