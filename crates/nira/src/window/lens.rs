@@ -2,7 +2,6 @@
 //! enlarged. The wheel changes the magnification while it is on.
 
 use std::cell::Cell;
-use std::time::Duration;
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -109,53 +108,16 @@ impl NiraWindow {
         let Some(notches) = take_notches(&imp.lens_wheel_acc, dy) else {
             return true;
         };
-        let changed = {
-            let mut settings = imp.settings.borrow_mut();
-            let old = settings.lens.magnification;
-            let new = (old - notches * LENS_STEP).clamp(LENS_MIN, LENS_MAX);
-            settings.lens.magnification = new;
-            new != old
-        };
-        if changed {
-            self.schedule_lens_save();
+        let old = self.imp_settings().lens.magnification;
+        let new = (old - notches * LENS_STEP).clamp(LENS_MIN, LENS_MAX);
+        if new != old {
+            self.update_settings(|s| s.lens.magnification = new);
             let (x, y) = imp.pointer.get();
             self.update_lens(x, y);
         }
         true
     }
-
-    /// Save the magnification once the wheel has been still for a moment,
-    /// rather than on every step.
-    fn schedule_lens_save(&self) {
-        let imp = self.imp();
-        if let Some(id) = imp.lens_save.take() {
-            id.remove();
-        }
-        let id = glib::timeout_add_local_once(
-            LENS_SAVE_DELAY,
-            glib::clone!(
-                #[weak(rename_to = win)]
-                self,
-                move || {
-                    win.imp().lens_save.take();
-                    win.update_settings(|_| {});
-                }
-            ),
-        );
-        imp.lens_save.replace(Some(id));
-    }
-
-    /// Save a magnification change still waiting for its delay (on close).
-    pub(super) fn flush_lens_save(&self) {
-        if let Some(id) = self.imp().lens_save.take() {
-            id.remove();
-            self.update_settings(|_| {});
-        }
-    }
 }
-
-/// How long the wheel must be still before the magnification is saved.
-const LENS_SAVE_DELAY: Duration = Duration::from_millis(500);
 
 /// Add `dy` (in wheel notches) to the movement in `acc` and take out the
 /// whole notches, keeping the remainder. Turning the other way starts

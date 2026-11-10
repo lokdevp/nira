@@ -70,8 +70,8 @@ mod imp {
         /// Wheel movement not yet worth a whole magnification step
         /// (touchpads send many small deltas).
         pub lens_wheel_acc: Cell<f64>,
-        /// Pending save of the lens magnification.
-        pub lens_save: RefCell<Option<glib::SourceId>>,
+        /// Pending save of the settings (see `update_settings`).
+        pub settings_save: RefCell<Option<glib::SourceId>>,
         /// The keys in use (edited in the preferences).
         pub keymap: RefCell<Keymap>,
         /// The keybinding editor's list, while the preferences are open.
@@ -167,13 +167,16 @@ mod imp {
         fn close_request(&self) -> glib::Propagation {
             let win = self.obj();
             win.save_window_size();
-            win.flush_lens_save();
+            win.flush_settings_save();
             win.flush_persister();
             self.parent_close_request()
         }
     }
     impl ApplicationWindowImpl for NiraWindow {}
 }
+
+/// How long the settings must be still before they are written.
+const SETTINGS_SAVE_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
 
 glib::wrapper! {
     pub struct NiraWindow(ObjectSubclass<imp::NiraWindow>)
@@ -301,13 +304,39 @@ impl NiraWindow {
         self.imp().settings.borrow()
     }
 
-    /// Change the settings and save them in the background.
+    /// Change the settings now and save them in the background once
+    /// they have been still for a moment: sliders, spin buttons and the
+    /// lens wheel change them many times a second.
     fn update_settings(&self, f: impl FnOnce(&mut Settings)) {
-        let snapshot = {
-            let mut settings = self.imp().settings.borrow_mut();
-            f(&mut settings);
-            settings.clone()
-        };
+        f(&mut self.imp().settings.borrow_mut());
+        let imp = self.imp();
+        if let Some(id) = imp.settings_save.take() {
+            id.remove();
+        }
+        let id = glib::timeout_add_local_once(
+            SETTINGS_SAVE_DELAY,
+            glib::clone!(
+                #[weak(rename_to = win)]
+                self,
+                move || {
+                    win.imp().settings_save.take();
+                    win.save_settings();
+                }
+            ),
+        );
+        imp.settings_save.replace(Some(id));
+    }
+
+    /// Write a settings change still waiting for its delay (on close).
+    fn flush_settings_save(&self) {
+        if let Some(id) = self.imp().settings_save.take() {
+            id.remove();
+            self.save_settings();
+        }
+    }
+
+    fn save_settings(&self) {
+        let snapshot = self.imp_settings().clone();
         self.persist(Box::new(move || snapshot.save()));
     }
 
