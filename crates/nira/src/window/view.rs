@@ -83,6 +83,25 @@ impl NiraWindow {
         self.pump();
     }
 
+    /// Stands in, at its display size, for a page that could not be read
+    /// or decoded.
+    fn failed_page(&self, page: usize, w: u32, h: u32) -> gtk::Label {
+        let name = self
+            .with_reader(|r| r.book().and_then(|b| b.pages.get(page).cloned()))
+            .map(|n| super::page_file_name(&n))
+            .unwrap_or_default();
+        let text = nira_core::i18n::t_args(
+            "page-unreadable",
+            &[("page", (page as i64 + 1).into()), ("file", name.into())],
+        );
+        let label = gtk::Label::new(Some(&text));
+        label.add_css_class("page-failed");
+        label.set_wrap(true);
+        label.set_justify(gtk::Justification::Center);
+        label.set_size_request(w as i32, h as i32);
+        label
+    }
+
     pub(super) fn draw(&self, mut frame: Frame) {
         let imp = self.imp();
         {
@@ -108,13 +127,21 @@ impl NiraWindow {
         {
             let mut pic_pages = [None; 2];
             for (pos, &slot) in frame.visual.iter().enumerate().take(2) {
-                pic_pages[pos] = frame.spread.get(slot).copied();
+                // A failed page has no pixels for the lens.
+                if !frame.failed.contains(&slot) {
+                    pic_pages[pos] = frame.spread.get(slot).copied();
+                }
             }
             imp.pic_pages.replace(pic_pages);
             let textures = imp.textures.borrow();
             for (pos, &slot) in frame.visual.iter().enumerate() {
-                let pic = &imp.pics[pos.min(1)];
                 let (w, h) = frame.sizes[slot];
+                if frame.failed.contains(&slot) {
+                    let page = frame.spread[slot];
+                    imp.content.append(&self.failed_page(page, w, h));
+                    continue;
+                }
+                let pic = &imp.pics[pos.min(1)];
                 match textures.get(slot).and_then(Option::as_ref) {
                     Some((_, tex)) => pic.set_paintable(Some(&SizedPaintable::new(tex, w, h))),
                     None => pic.set_paintable(gdk::Paintable::NONE),

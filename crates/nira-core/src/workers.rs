@@ -91,6 +91,8 @@ pub struct PageResult {
     pub pgen: u64,
     pub display: bool,
     pub pages: Vec<DecodedPage>,
+    /// Pages that could not be read or decoded.
+    pub failed: Vec<usize>,
 }
 
 /// Scale already-decoded pages to a new display size (zoom change, cache-hit
@@ -415,29 +417,37 @@ pub fn spread_targets(
 pub fn decode_pages(ar: Option<&mut Box<dyn Archive>>, cmd: &PageCmd) -> PageResult {
     // Decode every page first: the display size depends on the whole spread.
     let mut decoded: Vec<(usize, image::RgbaImage, u64)> = Vec::new();
-    if let Some(ar) = ar {
-        for &idx in &cmd.indices {
-            let Some(name) = cmd.pages.get(idx) else {
-                continue;
-            };
-            let bytes = match ar.read(name) {
-                Ok(b) => b,
-                Err(e) => {
-                    warn!("cannot read page {name}: {e}");
+    let mut failed = Vec::new();
+    match ar {
+        Some(ar) => {
+            for &idx in &cmd.indices {
+                let Some(name) = cmd.pages.get(idx) else {
+                    failed.push(idx);
                     continue;
-                }
-            };
-            let img = match image_loader::decode_oriented(&bytes, cmd.exif_rotation) {
-                Ok(img) => img,
-                Err(e) => {
-                    warn!("cannot decode page {name}: {e}");
-                    continue;
-                }
-            };
-            let img = image_loader::transform(img, cmd.rotation, cmd.flip_h, cmd.flip_v);
-            let img = image_loader::enhance(img, cmd.brightness, cmd.contrast, cmd.auto_enhance);
-            decoded.push((idx, img, bytes.len() as u64));
+                };
+                let bytes = match ar.read(name) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        warn!("cannot read page {name}: {e}");
+                        failed.push(idx);
+                        continue;
+                    }
+                };
+                let img = match image_loader::decode_oriented(&bytes, cmd.exif_rotation) {
+                    Ok(img) => img,
+                    Err(e) => {
+                        warn!("cannot decode page {name}: {e}");
+                        failed.push(idx);
+                        continue;
+                    }
+                };
+                let img = image_loader::transform(img, cmd.rotation, cmd.flip_h, cmd.flip_v);
+                let img =
+                    image_loader::enhance(img, cmd.brightness, cmd.contrast, cmd.auto_enhance);
+                decoded.push((idx, img, bytes.len() as u64));
+            }
         }
+        None => failed.extend(&cmd.indices),
     }
     let targets = if cmd.display {
         let mut sizes: Vec<(u32, u32)> =
@@ -490,6 +500,7 @@ pub fn decode_pages(ar: Option<&mut Box<dyn Archive>>, cmd: &PageCmd) -> PageRes
         pgen: cmd.pgen,
         display: cmd.display,
         pages,
+        failed,
     }
 }
 

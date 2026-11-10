@@ -75,6 +75,8 @@ open-failed = Cannot open the book
 open-error = { $file }: { $reason }
 open-error-list = Cannot list the pages of { $file }: { $reason }
 open-error-empty = { $file } has no pages.
+page-unreadable = Page { $page } can't be shown.
+    { $file } may be damaged.
 open-error-nested = { $file } holds other archives instead of pages. Extract it to read them.
 
 ## Toolbar
