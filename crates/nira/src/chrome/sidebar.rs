@@ -18,7 +18,10 @@ pub const WIDTH: i32 = 232;
 /// A thumbnail cell's picture.
 const THUMB_W: i32 = 84;
 const THUMB_H: i32 = 122;
-/// One grid row: picture, page number, padding and spacing.
+/// Cells per grid row.
+pub const COLUMNS: usize = 2;
+/// One grid row with page numbers: picture, page number, padding and
+/// spacing. Only until the grid is laid out; then `row_metrics` measures.
 pub const ROW_H: f64 = THUMB_H as f64 + 46.0;
 /// Padding above the first row: the top padding of `flowbox.thumbview` in
 /// `style.css`.
@@ -107,8 +110,8 @@ impl Sidebar {
         }
 
         let grid = gtk::FlowBox::new();
-        grid.set_min_children_per_line(2);
-        grid.set_max_children_per_line(2);
+        grid.set_min_children_per_line(COLUMNS as u32);
+        grid.set_max_children_per_line(COLUMNS as u32);
         grid.set_column_spacing(10);
         grid.set_row_spacing(12);
         grid.set_selection_mode(gtk::SelectionMode::Single);
@@ -302,6 +305,22 @@ impl Sidebar {
 
     pub fn set_footer(&self, text: &str) {
         self.footer.set_text(text);
+    }
+
+    /// Where the first row starts and the distance from one row to the
+    /// next, in scroll units, measured from the laid-out cells (a row's
+    /// height depends on the page numbers, the font and the theme). Before
+    /// a layout, or with a single row, the design's sizes.
+    pub fn row_metrics(&self) -> (f64, f64) {
+        let cells = self.cells.borrow();
+        let y = |i: usize| {
+            let b = cells.get(i)?.child.compute_bounds(&self.grid)?;
+            (b.height() > 0.0).then_some(b.y() as f64)
+        };
+        match (y(0), y(COLUMNS)) {
+            (Some(first), Some(second)) if second > first => (TOP + first, second - first),
+            _ => (TOP, ROW_H),
+        }
     }
 }
 
