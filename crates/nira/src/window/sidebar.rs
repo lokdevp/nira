@@ -38,13 +38,19 @@ impl NiraWindow {
                 }
             }
         ));
-        side.scroll
-            .vadjustment()
-            .connect_value_changed(glib::clone!(
-                #[weak(rename_to = win)]
-                self,
-                move |_| win.refresh_thumbnails()
-            ));
+        let adj = side.scroll.vadjustment();
+        adj.connect_value_changed(glib::clone!(
+            #[weak(rename_to = win)]
+            self,
+            move |_| win.refresh_thumbnails()
+        ));
+        // A layout (the first one after opening a book, a resize, page
+        // numbers turned on or off) changes the rows' measured size.
+        adj.connect_changed(glib::clone!(
+            #[weak(rename_to = win)]
+            self,
+            move |_| win.refresh_thumbnails()
+        ));
         let root = side.root.clone();
         let _ = self.imp().sidebar.set(side);
         root
@@ -118,12 +124,13 @@ impl NiraWindow {
             return;
         };
         let adj = side.scroll.vadjustment();
+        let (top, row_h) = side.row_metrics();
         let visible = visible_cells(
             adj.value(),
             adj.page_size(),
-            sidebar::ROW_H,
-            sidebar::TOP,
-            2,
+            row_h,
+            top,
+            sidebar::COLUMNS,
             pages.len(),
         );
         let order = wanted_order(page, pages.len(), visible);

@@ -5,9 +5,10 @@
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib};
-use nira_core::i18n::t;
+use nira_core::i18n::{t, t_args};
 use nira_core::keymap::{Action, Keymap};
 
+use super::actions::FIXED_ACCELS;
 use super::NiraWindow;
 
 /// A row of the editor.
@@ -62,6 +63,7 @@ impl NiraWindow {
                 win.imp().keys_list.replace(None);
                 win.imp().key_rows.borrow_mut().clear();
                 win.imp().capturing.set(None);
+                win.imp().refused_key.replace(None);
                 glib::Propagation::Proceed
             }
         ));
@@ -102,6 +104,7 @@ impl NiraWindow {
                 self,
                 move |_| {
                     win.imp().capturing.set(Some(action));
+                    win.imp().refused_key.replace(None);
                     win.refresh_key_rows();
                 }
             ));
@@ -151,7 +154,11 @@ impl NiraWindow {
             }
             let accels = keymap.accels(row.action);
             if capturing == Some(row.action) {
-                row.keys.append(&gtk::Label::new(Some(&t("keys-press"))));
+                let prompt = match imp.refused_key.borrow().as_deref() {
+                    Some(key) => t_args("keys-fixed", &[("key", key.to_string().into())]),
+                    None => t("keys-press"),
+                };
+                row.keys.append(&gtk::Label::new(Some(&prompt)));
             } else {
                 for accel in accels {
                     if let Some(text) = accel_label(accel) {
@@ -182,18 +189,29 @@ impl NiraWindow {
             return glib::Propagation::Stop;
         }
         let mods = mods & gtk::accelerator_get_default_mod_mask();
-        imp.capturing.set(None);
         if key == gdk::Key::Escape && mods.is_empty() {
+            imp.capturing.set(None);
+            imp.refused_key.replace(None);
             self.refresh_key_rows();
             return glib::Propagation::Stop;
         }
-        let accel = gtk::accelerator_name(key, mods).to_string();
+        // Stored like the defaults: Shift+R is "<Shift>r".
+        let accel = gtk::accelerator_name(key.to_lower(), mods).to_string();
+        if is_fixed(&accel) {
+            // Keep capturing, so another key can be pressed.
+            imp.refused_key
+                .replace(Some(crate::chrome::accel_label(&accel).unwrap_or(accel)));
+            self.refresh_key_rows();
+            return glib::Propagation::Stop;
+        }
+        imp.capturing.set(None);
+        imp.refused_key.replace(None);
         self.change_keys(|k| {
             for &other in Action::ALL {
                 let kept: Vec<String> = k
                     .accels(other)
                     .iter()
-                    .filter(|a| **a != accel)
+                    .filter(|a| !same_accel(a, &accel))
                     .cloned()
                     .collect();
                 k.set_accels(other, kept);
@@ -225,6 +243,28 @@ impl NiraWindow {
     }
 }
 
+/// The key and modifiers of `accel`, with letters lowercased: GTK reads
+/// "<Shift>R" and "<Shift>r" as the same key.
+fn parsed(accel: &str) -> Option<(gdk::Key, gdk::ModifierType)> {
+    gtk::accelerator_parse(accel).map(|(key, mods)| (key.to_lower(), mods))
+}
+
+/// Whether two accelerators are the same key, however they are written.
+fn same_accel(a: &str, b: &str) -> bool {
+    match (parsed(a), parsed(b)) {
+        (Some(a), Some(b)) => a == b,
+        _ => a == b,
+    }
+}
+
+/// Whether `accel` is one of the keys that can't be changed.
+fn is_fixed(accel: &str) -> bool {
+    FIXED_ACCELS
+        .iter()
+        .flat_map(|(_, accels)| accels.iter())
+        .any(|fixed| same_accel(fixed, accel))
+}
+
 fn is_modifier(key: gdk::Key) -> bool {
     use gdk::Key;
     matches!(
@@ -242,4 +282,29 @@ fn is_modifier(key: gdk::Key) -> bool {
             | Key::ISO_Level3_Shift
             | Key::Caps_Lock
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// One test: parsing accelerators needs GTK, which needs a display
+    /// and stays on the thread that started it.
+    #[test]
+    fn accels_compare_as_keys() {
+        if gtk::init().is_err() {
+            eprintln!("skipped: no display for GTK");
+            return;
+        }
+        assert!(same_accel("<Shift>R", "<Shift>r"));
+        assert!(same_accel("<Ctrl>o", "<Control>o"));
+        assert!(!same_accel("r", "<Shift>r"));
+        assert!(!same_accel("<Control>o", "o"));
+        // The fixed keys, however they are written.
+        assert!(is_fixed("q"));
+        assert!(is_fixed("<Control>O"));
+        assert!(is_fixed("<Ctrl>comma"));
+        assert!(!is_fixed("<Shift>q"));
+        assert!(!is_fixed("<Control>s"));
+    }
 }

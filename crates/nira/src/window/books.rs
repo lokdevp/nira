@@ -212,9 +212,10 @@ impl NiraWindow {
     }
 
     /// A page turn ran past the book's start or end: continue in the
-    /// neighbouring book when the settings allow. True if one is opening.
+    /// neighbouring book (the caller checked the setting that applies).
+    /// True if one is opening.
     pub(super) fn turn_past_book(&self, forward: bool) -> bool {
-        if !self.imp_settings().files.open_next_book || self.imp().opening.get() {
+        if self.imp().opening.get() {
             return false;
         }
         // Going back lands on the previous book's last page.

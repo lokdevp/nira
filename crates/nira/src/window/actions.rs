@@ -43,6 +43,14 @@ fn toggle(action: Action, initial: bool, f: fn(&NiraWindow, bool)) -> gio::Actio
         .build()
 }
 
+/// Keys outside the keymap: they can't be changed, and the keybinding
+/// editor won't give them to another action.
+pub(super) const FIXED_ACCELS: &[(&str, &[&str])] = &[
+    ("win.open", &["<Control>o"]),
+    ("win.preferences", &["<Control>comma"]),
+    ("window.close", &["<Control>w", "q"]),
+];
+
 impl NiraWindow {
     pub(super) fn add_actions(&self) {
         let (double, manga, fit, invert, thumbs) = {
@@ -143,9 +151,9 @@ impl NiraWindow {
     /// window does not have yet are skipped, and so are accelerators GTK
     /// cannot parse.
     pub(super) fn install_accels(&self, app: &gtk::Application, keymap: &Keymap) {
-        app.set_accels_for_action("win.open", &["<Control>o"]);
-        app.set_accels_for_action("win.preferences", &["<Control>comma"]);
-        app.set_accels_for_action("window.close", &["<Control>w", "q"]);
+        for (action, accels) in FIXED_ACCELS {
+            app.set_accels_for_action(action, accels);
+        }
         for &action in Action::ALL {
             if self.lookup_action(action.name()).is_none() {
                 continue;

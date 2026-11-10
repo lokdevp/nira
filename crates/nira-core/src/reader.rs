@@ -8,7 +8,7 @@
 //! `take_commands` returns to the page worker, hands worker results back to
 //! `on_result`, and draws the `Frame` that `frame` returns.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -24,6 +24,9 @@ use crate::zoom::ZoomModel;
 
 /// Decoded pages kept in memory, at most this many bytes.
 const CACHE_BYTES: usize = 384 * 1024 * 1024;
+/// The layout size of a page that could not be decoded, before any page
+/// has been: a portrait page.
+const FAILED_PAGE_SIZE: (u32, u32) = (1000, 1500);
 
 /// An opened book: its path and page names in reading order.
 #[derive(Debug, Clone)]
@@ -87,6 +90,9 @@ pub struct Frame {
     /// Slots whose pixels change. Slots not listed keep what they show; a
     /// slot showing another page than `spread[slot]` should be cleared.
     pub updates: Vec<SlotUpdate>,
+    /// Slots (reading order) whose page could not be read or decoded: they
+    /// get a placeholder of their size instead of pixels.
+    pub failed: Vec<usize>,
 }
 
 /// What a slot shows: the page and the display size its pixels were made
@@ -111,6 +117,13 @@ pub struct Reader {
     file_bytes: HashMap<usize, u64>,
     cache: LruCache<usize, (u32, u32, Pixels)>,
     cache_pages: usize,
+    /// The pages to keep cached, most wanted first (`update_cache_window`).
+    wanted: Vec<usize>,
+    /// Pages that could not be read or decoded. Tried again when shown,
+    /// not prefetched.
+    failed: HashSet<usize>,
+    /// The size of the last page decoded, for failed pages' placeholders.
+    typical_size: Option<(u32, u32)>,
     shown: Vec<Option<Shown>>,
     commands: Vec<WorkerCmd>,
     /// Bumped per opened book.
@@ -143,6 +156,9 @@ impl Reader {
             file_bytes: HashMap::new(),
             cache: LruCache::new(cache_pages, CACHE_BYTES),
             cache_pages,
+            wanted: Vec::new(),
+            failed: HashSet::new(),
+            typical_size: None,
             shown: Vec::new(),
             commands: Vec::new(),
             gen: 0,
@@ -177,6 +193,10 @@ impl Reader {
 
     /// Full-resolution size of a decoded page.
     pub fn page_size(&self, page: usize) -> Option<(u32, u32)> {
+        // A failed page's size is only a placeholder for the layout.
+        if self.failed.contains(&page) {
+            return None;
+        }
         self.dims.get(&page).copied()
     }
 
@@ -206,6 +226,7 @@ impl Reader {
         self.gen += 1;
         self.page = start.min(book.pages.len().saturating_sub(1));
         self.book = Some(book);
+        self.typical_size = None;
         self.forget_pages();
         self.loading = false;
         self.load_current();
@@ -225,16 +246,23 @@ impl Reader {
         self.cache.clear();
         self.shown.clear();
         self.prefetch_queue.clear();
+        self.wanted.clear();
+        self.failed.clear();
         self.prefetching = false;
         self.scale_pending = None;
+        // A rescale in flight is of the forgotten pixels: its result must
+        // not be painted.
+        self.scale_req += 1;
     }
 
-    /// Keep up to `pages` decoded pages in memory (drops the cache).
+    /// Keep up to `pages` decoded pages in memory. The pages already
+    /// cached stay, as many as fit (the shown ones always).
     pub fn set_cache_pages(&mut self, pages: u32) {
         let pages = pages.max(1) as usize;
         if pages != self.cache_pages {
             self.cache_pages = pages;
-            self.cache = LruCache::new(pages, CACHE_BYTES);
+            let spread = self.spread();
+            self.cache.set_capacity(pages, |k| spread.contains(k));
             self.update_cache_window();
         }
     }
@@ -389,9 +417,16 @@ impl Reader {
             }
             return None;
         }
+        // Sized like the pages beside them, or the last one decoded.
+        let like = res.pages.first().map(|p| (p.full_w, p.full_h));
+        self.note_failed(&res.failed, like);
         if !res.display {
             for p in res.pages {
-                self.cache_page(&p);
+                if !self.cache_prefetched(&p) {
+                    // The cache is full of pages wanted more: the rest of
+                    // the window, wanted less, would not fit either.
+                    self.prefetch_queue.clear();
+                }
             }
             self.prefetching = false;
             self.pump_prefetch();
@@ -471,12 +506,60 @@ impl Reader {
         frame
     }
 
+    /// Cache a page decoded for display. Only the pages on screen are
+    /// sure to stay.
     fn cache_page(&mut self, p: &DecodedPage) {
+        let bytes = self.note_page(p);
+        let spread = self.spread();
+        self.cache
+            .put_keeping(p.idx, (p.full_w, p.full_h, p.full.clone()), bytes, |k| {
+                spread.contains(k)
+            });
+    }
+
+    /// Cache a prefetched page if there is room, making it only by
+    /// evicting pages wanted less (never the ones on screen). False if it
+    /// didn't fit.
+    fn cache_prefetched(&mut self, p: &DecodedPage) -> bool {
+        let bytes = self.note_page(p);
+        let spread = self.spread();
+        let wanted = &self.wanted;
+        let rank = |k: &usize| -> usize {
+            if spread.contains(k) {
+                0
+            } else {
+                wanted
+                    .iter()
+                    .position(|w| w == k)
+                    .map_or(usize::MAX, |i| i + 1)
+            }
+        };
+        let mine = rank(&p.idx);
+        self.cache
+            .put_if_room(p.idx, (p.full_w, p.full_h, p.full.clone()), bytes, |k| {
+                rank(k) > mine
+            })
+    }
+
+    /// Pages that failed get a placeholder size, so the spread is laid out
+    /// (and a good page beside a bad one is shown). It is a real page's
+    /// size where one is known: a spread's pages share one zoom, so an
+    /// odd size would shrink or swell the page beside it.
+    fn note_failed(&mut self, failed: &[usize], like: Option<(u32, u32)>) {
+        let size = like.or(self.typical_size).unwrap_or(FAILED_PAGE_SIZE);
+        for &idx in failed {
+            self.failed.insert(idx);
+            self.dims.entry(idx).or_insert(size);
+        }
+    }
+
+    /// Record a decoded page's sizes; its size in memory.
+    fn note_page(&mut self, p: &DecodedPage) -> usize {
+        self.failed.remove(&p.idx);
+        self.typical_size = Some((p.full_w, p.full_h));
         self.dims.insert(p.idx, (p.full_w, p.full_h));
         self.file_bytes.insert(p.idx, p.file_bytes);
-        let bytes = (p.full_w as usize) * (p.full_h as usize) * 4;
-        self.cache
-            .put(p.idx, (p.full_w, p.full_h, p.full.clone()), bytes);
+        (p.full_w as usize) * (p.full_h as usize) * 4
     }
 
     fn frame_layout(&self, spread: &[usize]) -> Frame {
@@ -485,11 +568,19 @@ impl Reader {
             .map(|i| self.dims.get(i).copied())
             .collect::<Option<_>>()
             .unwrap_or_default();
+        let failed = if sizes.is_empty() {
+            Vec::new()
+        } else {
+            (0..spread.len())
+                .filter(|&slot| self.failed.contains(&spread[slot]))
+                .collect()
+        };
         Frame {
             spread: spread.to_vec(),
             visual: visual_order(spread.len(), self.view.manga),
             sizes: spread_targets(&self.zoom, &sizes, self.viewport),
             updates: Vec::new(),
+            failed,
         }
     }
 
@@ -607,9 +698,11 @@ impl Reader {
         self.cache
             .retain(|k| wanted.contains(k) || spread.contains(k));
         self.prefetch_queue = wanted
-            .into_iter()
-            .filter(|i| !self.cache.contains(i))
+            .iter()
+            .copied()
+            .filter(|i| !self.cache.contains(i) && !self.failed.contains(i))
             .collect();
+        self.wanted = wanted;
         self.pump_prefetch();
     }
 
@@ -646,6 +739,9 @@ mod tests {
                         WorkerResult::Decoded(decode_pages(ar.as_mut(), &cmd))
                     }
                     WorkerCmd::Rescale(cmd) => WorkerResult::Rescaled(rescale_pages(cmd)),
+                    WorkerCmd::UseArchive { .. } => {
+                        unreachable!("the reader never hands over archives")
+                    }
                 };
                 frames.extend(reader.on_result(res));
             }
@@ -765,5 +861,163 @@ mod tests {
             panic!("expected scaled pixels");
         };
         assert_eq!((*w, *h), frame.sizes[0]);
+    }
+
+    #[test]
+    fn a_full_cache_keeps_the_shown_page_and_its_neighbours() {
+        let mut r = open("double-pages-test.cbz", View::default());
+        // The fixture pages are 210x297: room for three of them, while the
+        // prefetch window asks for seven.
+        let page_bytes = 210 * 297 * 4;
+        r.cache = LruCache::new(7, page_bytes * 3 + page_bytes / 2);
+        let mut decodes = 0;
+        loop {
+            let cmds = r.take_commands();
+            if cmds.is_empty() {
+                break;
+            }
+            for cmd in cmds {
+                let WorkerCmd::Decode(cmd) = cmd else {
+                    continue;
+                };
+                decodes += 1;
+                let mut ar = crate::archive::open(&cmd.path).ok();
+                r.on_result(WorkerResult::Decoded(decode_pages(ar.as_mut(), &cmd)));
+            }
+        }
+        // The page on screen and the nearest ones stay, the far ones were
+        // never squeezed in.
+        assert!(r.cache.contains(&0) && r.cache.contains(&1) && r.cache.contains(&2));
+        assert!(!r.cache.contains(&3));
+        // Prefetching stopped at the first page that didn't fit.
+        assert_eq!(decodes, 4);
+        // So the next page needs no decode.
+        assert_eq!(r.flip(true, 1), Flip::Moved);
+        assert!(!r.is_loading());
+    }
+
+    /// A book of three pages whose middle page is not an image.
+    fn book_with_a_broken_page(name: &str) -> PathBuf {
+        use std::io::Write;
+        let path = std::env::temp_dir().join(format!("nira-{}-{name}.cbz", std::process::id()));
+        let mut png = Vec::new();
+        image::RgbaImage::from_pixel(30, 40, image::Rgba([200, 10, 10, 255]))
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        let opts = zip::write::SimpleFileOptions::default();
+        for (entry, bytes) in [
+            ("1.png", &png[..]),
+            ("2.png", b"not a png"),
+            ("3.png", &png[..]),
+        ] {
+            zip.start_file(entry, opts).unwrap();
+            zip.write_all(bytes).unwrap();
+        }
+        zip.finish().unwrap();
+        path
+    }
+
+    fn open_path(path: PathBuf, view: View, start: usize) -> Reader {
+        let mut ar = crate::archive::open(&path).unwrap();
+        let pages = ar.page_names().unwrap();
+        let mut r = Reader::new(view, ZoomModel::default(), Enhance::default(), 7);
+        r.set_viewport((800.0, 600.0));
+        r.open(
+            Book {
+                path,
+                pages: Arc::new(pages),
+                is_archive: true,
+            },
+            start,
+        );
+        r
+    }
+
+    #[test]
+    fn a_page_that_fails_gets_a_placeholder() {
+        let path = book_with_a_broken_page("single");
+        let mut r = open_path(path.clone(), View::default(), 0);
+        run(&mut r);
+        // Prefetching found the broken page, and won't decode it again.
+        assert!(r.failed.contains(&1));
+        assert!(!r.prefetch_queue.contains(&1));
+        assert_eq!(r.flip(true, 1), Flip::Moved);
+        run(&mut r);
+        let frame = r.frame();
+        assert_eq!(frame.spread, vec![1]);
+        assert_eq!(frame.failed, vec![0], "the slot is marked");
+        assert_eq!(frame.sizes.len(), 1, "and still laid out");
+        assert_eq!(r.page_size(1), None, "its placeholder size isn't shown");
+        assert!(!r.is_loading(), "navigation goes on");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn a_spread_keeps_its_good_page_beside_a_failed_one() {
+        let path = book_with_a_broken_page("spread");
+        let view = View {
+            double_page: true,
+            cover_alone: false,
+            ..View::default()
+        };
+        let mut r = open_path(path.clone(), view, 0);
+        let frames = run(&mut r);
+        let drawn = frames.last().unwrap();
+        assert_eq!(drawn.spread, vec![0, 1]);
+        assert_eq!(drawn.sizes.len(), 2);
+        // The placeholder takes the good page's size, so both share one
+        // height instead of the good page shrinking beside it.
+        assert_eq!(drawn.sizes[0], drawn.sizes[1]);
+        assert_eq!(drawn.failed, vec![1]);
+        assert!(r.cache.contains(&0));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn changing_the_cache_size_keeps_the_cached_pages() {
+        let mut r = open("double-pages-test.cbz", View::default());
+        run(&mut r);
+        let cached: Vec<usize> = (0..r.page_count())
+            .filter(|i| r.cache.contains(i))
+            .collect();
+        assert!(cached.len() > 1);
+        // Growing keeps every page and decodes only the new ones.
+        r.set_cache_pages(9);
+        for cmd in r.take_commands() {
+            if let WorkerCmd::Decode(cmd) = cmd {
+                assert!(
+                    cmd.indices.iter().all(|i| !cached.contains(i)),
+                    "{:?} was decoded again",
+                    cmd.indices
+                );
+            }
+        }
+        assert!(cached.iter().all(|i| r.cache.contains(i)));
+        // Shrinking to one page keeps the shown one.
+        r.set_cache_pages(1);
+        assert!(r.cache.contains(&r.page()));
+    }
+
+    #[test]
+    fn a_rescale_from_before_an_invalidation_is_dropped() {
+        let mut r = open("double-pages-test.cbz", View::default());
+        run(&mut r);
+        r.set_viewport((100.0, 100.0));
+        r.frame();
+        let cmds = r.take_commands();
+        let Some(WorkerCmd::Rescale(cmd)) = cmds
+            .into_iter()
+            .find(|c| matches!(c, WorkerCmd::Rescale(_)))
+        else {
+            panic!("expected a rescale");
+        };
+        // Rotation or enhancement changed while the rescale was running.
+        r.invalidate();
+        let stale = r.on_result(WorkerResult::Rescaled(rescale_pages(cmd)));
+        assert!(stale.is_none(), "the old pixels were painted");
+        // The fresh decode still arrives and is drawn.
+        let frames = run(&mut r);
+        assert!(frames.iter().any(|f| !f.updates.is_empty()));
     }
 }

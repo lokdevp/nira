@@ -75,6 +75,9 @@ open-failed = Cannot open the book
 open-error = { $file }: { $reason }
 open-error-list = Cannot list the pages of { $file }: { $reason }
 open-error-empty = { $file } has no pages.
+page-unreadable = Page { $page } can't be shown.
+    { $file } may be damaged.
+open-error-nested = { $file } holds other archives instead of pages. Extract it to read them.
 
 ## Toolbar
 
@@ -218,6 +221,7 @@ prefs-cached-pages = Decoded pages kept in memory
 
 keys-hint = Press + and then the new key. A key used by another action moves to this one.
 keys-press = Press a key… (Esc cancels)
+keys-fixed = { $key } can't be changed. Press another key… (Esc cancels)
 keys-add = Add a key
 keys-clear = Remove all keys
 keys-reset = Restore the default keys

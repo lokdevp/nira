@@ -28,6 +28,7 @@ use std::thread::JoinHandle;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
+use nira_core::archive::Archive;
 use nira_core::bookmarks::Bookmarks;
 use nira_core::history::History;
 use nira_core::i18n::{t, t_args};
@@ -66,6 +67,11 @@ mod imp {
         pub pagebar: OnceCell<PageBar>,
         pub lens: OnceCell<LensView>,
         pub lens_on: Cell<bool>,
+        /// Wheel movement not yet worth a whole magnification step
+        /// (touchpads send many small deltas).
+        pub lens_wheel_acc: Cell<f64>,
+        /// Pending save of the settings (see `update_settings`).
+        pub settings_save: RefCell<Option<glib::SourceId>>,
         /// The keys in use (edited in the preferences).
         pub keymap: RefCell<Keymap>,
         /// The keybinding editor's list, while the preferences are open.
@@ -73,6 +79,9 @@ mod imp {
         pub key_rows: RefCell<Vec<keys::KeyRow>>,
         /// The action waiting for a key press in the editor.
         pub capturing: Cell<Option<nira_core::keymap::Action>>,
+        /// A fixed key pressed while capturing, shown so it can be
+        /// replaced.
+        pub refused_key: RefCell<Option<String>>,
         /// The page each picture shows (screen order).
         pub pic_pages: RefCell<[Option<usize>; 2]>,
         pub welcome: OnceCell<Welcome>,
@@ -158,12 +167,16 @@ mod imp {
         fn close_request(&self) -> glib::Propagation {
             let win = self.obj();
             win.save_window_size();
+            win.flush_settings_save();
             win.flush_persister();
             self.parent_close_request()
         }
     }
     impl ApplicationWindowImpl for NiraWindow {}
 }
+
+/// How long the settings must be still before they are written.
+const SETTINGS_SAVE_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
 
 glib::wrapper! {
     pub struct NiraWindow(ObjectSubclass<imp::NiraWindow>)
@@ -291,13 +304,39 @@ impl NiraWindow {
         self.imp().settings.borrow()
     }
 
-    /// Change the settings and save them in the background.
+    /// Change the settings now and save them in the background once
+    /// they have been still for a moment: sliders, spin buttons and the
+    /// lens wheel change them many times a second.
     fn update_settings(&self, f: impl FnOnce(&mut Settings)) {
-        let snapshot = {
-            let mut settings = self.imp().settings.borrow_mut();
-            f(&mut settings);
-            settings.clone()
-        };
+        f(&mut self.imp().settings.borrow_mut());
+        let imp = self.imp();
+        if let Some(id) = imp.settings_save.take() {
+            id.remove();
+        }
+        let id = glib::timeout_add_local_once(
+            SETTINGS_SAVE_DELAY,
+            glib::clone!(
+                #[weak(rename_to = win)]
+                self,
+                move || {
+                    win.imp().settings_save.take();
+                    win.save_settings();
+                }
+            ),
+        );
+        imp.settings_save.replace(Some(id));
+    }
+
+    /// Write a settings change still waiting for its delay (on close).
+    fn flush_settings_save(&self) {
+        if let Some(id) = self.imp().settings_save.take() {
+            id.remove();
+            self.save_settings();
+        }
+    }
+
+    fn save_settings(&self) {
+        let snapshot = self.imp_settings().clone();
         self.persist(Box::new(move || snapshot.save()));
     }
 
@@ -350,6 +389,33 @@ impl NiraWindow {
             if tx.send(cmd).is_err() {
                 log::error!("the page worker stopped");
                 return;
+            }
+        }
+    }
+
+    /// Give the workers the handles the open thread listed, so the book is
+    /// opened and unpacked once: the page worker gets `archive`, the
+    /// thumbnailer `twin`. Without a twin, the thumbnailer opens the path.
+    fn hand_over_archive(
+        &self,
+        path: &Path,
+        archive: Box<dyn Archive>,
+        twin: Option<Box<dyn Archive>>,
+    ) {
+        let imp = self.imp();
+        if let (Some(twin), Some(tx)) = (twin, imp.thumb_tx.borrow().as_ref()) {
+            let _ = tx.send(ThumbCmd::UseArchive {
+                path: path.to_path_buf(),
+                archive: twin,
+            });
+        }
+        if let Some(tx) = imp.page_tx.borrow().as_ref() {
+            let cmd = WorkerCmd::UseArchive {
+                path: path.to_path_buf(),
+                archive,
+            };
+            if tx.send(cmd).is_err() {
+                log::error!("the page worker stopped");
             }
         }
     }
@@ -424,6 +490,9 @@ impl NiraWindow {
             opened.pages.len(),
             opened.kind.as_deref().unwrap_or("folder")
         );
+        // Before the reader's first decode command, so the page worker
+        // reads through this handle instead of opening the book again.
+        self.hand_over_archive(&path, opened.archive, opened.twin);
         let start = start.unwrap_or_else(|| self.resume_page(&path));
         self.imp().book_bytes.set(opened.size);
         self.imp().book_kind.replace(opened.kind.clone());
@@ -550,8 +619,13 @@ impl NiraWindow {
         if w <= 0 || h <= 0 || self.is_fullscreen() || self.is_maximized() {
             return;
         }
-        let window = &self.imp_settings().window;
-        if (window.width, window.height) != (w, h) {
+        // Copy the saved size out so the settings borrow ends before
+        // `update_settings` borrows them mutably.
+        let saved = {
+            let s = self.imp_settings();
+            (s.window.width, s.window.height)
+        };
+        if saved != (w, h) {
             self.update_settings(|s| {
                 s.window.width = w;
                 s.window.height = h;
@@ -592,5 +666,6 @@ fn open_error_text(path: &Path, e: &OpenError) -> String {
             &[("file", file.into()), ("reason", reason.clone().into())],
         ),
         OpenError::Empty => t_args("open-error-empty", &[("file", file.into())]),
+        OpenError::NestedArchives => t_args("open-error-nested", &[("file", file.into())]),
     }
 }

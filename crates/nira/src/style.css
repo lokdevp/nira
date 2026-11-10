@@ -273,6 +273,13 @@ window.nira-main .thumb-paper {
   background: #E9E8E3;
   border-radius: 2px;
 }
+window.nira-main .page-failed {
+  padding: 24px;
+  border: 1px dashed @nira_divider;
+  border-radius: 4px;
+  background: @nira_surface;
+  color: @nira_text_dim;
+}
 window.nira-main .page-num {
   font-size: 11px;
   color: @nira_text_dim;

@@ -80,6 +80,7 @@ fn parse_optimal_dpi(trace: &str) -> u32 {
     max_dpi
 }
 
+#[derive(Clone)]
 pub struct PdfArchive {
     path: PathBuf,
     name: String,
@@ -124,6 +125,11 @@ impl PdfArchive {
 impl Archive for PdfArchive {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn try_clone(&self) -> Option<Box<dyn Archive>> {
+        // Nothing is unpacked: every read runs from the file itself.
+        Some(Box::new(self.clone()))
     }
 
     fn page_names(&mut self) -> Result<Vec<String>, ArchiveError> {

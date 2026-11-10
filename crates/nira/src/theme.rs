@@ -125,6 +125,10 @@ struct ThemeState {
     theme: RefCell<String>,
     /// Whether the desktop's preference is being watched.
     watching: Cell<bool>,
+    /// The portal's `color-scheme` (0: no preference, 1: dark, 2: light),
+    /// once it has answered or signalled; `None` before that or without a
+    /// portal.
+    portal_scheme: Cell<Option<u32>>,
 }
 
 /// Colour the reading area: the settings' background, or `page` (the shown
@@ -148,10 +152,13 @@ pub fn apply_background(settings: &Settings, page: Option<[u8; 3]>) {
 /// Colour the main window with theme `id` (`"system"` follows the
 /// desktop's light/dark preference, and keeps following it while the app
 /// runs). GTK's own dialogs follow the theme's lightness.
+/// Cheap when `id` is the theme already applied, so callers needn't check.
 pub fn apply_theme(id: &str) {
-    STATE.with(|state| state.theme.replace(id.to_string()));
-    watch_system();
-    refresh_theme();
+    let changed = STATE.with(|state| state.theme.replace(id.to_string()) != id);
+    let first = watch_system();
+    if changed || first {
+        refresh_theme();
+    }
 }
 
 fn refresh_theme() {
@@ -197,10 +204,10 @@ fn set_dialogs_dark(settings: &gtk::Settings, dark: bool) {
 }
 
 /// The desktop's light/dark preference: the freedesktop portal's colour
-/// scheme where there is one, otherwise a "dark" GTK theme name.
+/// scheme once it is known, otherwise a "dark" GTK theme name. Never
+/// blocks: the portal is read asynchronously by `watch_system`.
 fn system_prefers_dark() -> bool {
-    if let Some(scheme) = portal_color_scheme() {
-        // 0: no preference, 1: dark, 2: light.
+    if let Some(scheme) = STATE.with(|state| state.portal_scheme.get()) {
         return scheme == 1;
     }
     gtk::Settings::default()
@@ -208,37 +215,87 @@ fn system_prefers_dark() -> bool {
         .is_some_and(|name| name.to_lowercase().contains("dark"))
 }
 
+const PORTAL_NAME: &str = "org.freedesktop.portal.Desktop";
 const PORTAL_PATH: &str = "/org/freedesktop/portal/desktop";
 const PORTAL_SETTINGS: &str = "org.freedesktop.portal.Settings";
+const APPEARANCE: &str = "org.freedesktop.appearance";
+const COLOR_SCHEME_KEY: &str = "color-scheme";
+/// Generous, as nothing waits on the reply: a portal started on demand
+/// can take seconds to answer the first call.
+const PORTAL_TIMEOUT_MS: i32 = 10_000;
 
+/// Store the portal's colour scheme and recolour if the theme follows it.
+fn set_portal_scheme(scheme: u32) {
+    let (changed, system) = STATE.with(|state| {
+        let changed = state.portal_scheme.replace(Some(scheme)) != Some(scheme);
+        (changed, *state.theme.borrow() == THEME_SYSTEM)
+    });
+    log::debug!("portal color-scheme: {scheme}");
+    if changed && system {
+        refresh_theme();
+    }
+}
+
+/// Subscribe to the portal's `SettingChanged`, then read `color-scheme`
+/// once, all without blocking the main loop.
 #[cfg(unix)]
-fn session_bus() -> Option<gtk::gio::DBusConnection> {
-    gtk::gio::bus_get_sync(gtk::gio::BusType::Session, gtk::gio::Cancellable::NONE).ok()
-}
-
-#[cfg(not(unix))]
-fn session_bus() -> Option<gtk::gio::DBusConnection> {
-    None
-}
-
-/// `org.freedesktop.appearance color-scheme` from the settings portal.
-fn portal_color_scheme() -> Option<u32> {
+async fn watch_portal() {
+    use gtk::gio;
     use gtk::glib::prelude::*;
-    let bus = session_bus()?;
-    let reply = bus
-        .call_sync(
-            Some("org.freedesktop.portal.Desktop"),
+    let bus = match gio::bus_get_future(gio::BusType::Session).await {
+        Ok(bus) => bus,
+        Err(e) => {
+            log::debug!("no session bus: {e}");
+            return;
+        }
+    };
+    // Subscribed first, so a change during the read isn't missed. The
+    // subscription lasts for the whole run.
+    let _ = bus.signal_subscribe(
+        None,
+        Some(PORTAL_SETTINGS),
+        Some("SettingChanged"),
+        Some(PORTAL_PATH),
+        Some(APPEARANCE),
+        gio::DBusSignalFlags::NONE,
+        |_, _, _, _, _, params| {
+            // (namespace, key, value): the new value comes with the signal.
+            if params.n_children() == 3 && params.child_value(1).str() == Some(COLOR_SCHEME_KEY) {
+                if let Some(scheme) = unwrap_u32(params.child_value(2)) {
+                    set_portal_scheme(scheme);
+                }
+            }
+        },
+    );
+    let args = (APPEARANCE, COLOR_SCHEME_KEY).to_variant();
+    let call = |method: &str| {
+        bus.call_future(
+            Some(PORTAL_NAME),
             PORTAL_PATH,
             PORTAL_SETTINGS,
-            "Read",
-            Some(&("org.freedesktop.appearance", "color-scheme").to_variant()),
+            method,
+            Some(&args),
             None,
-            gtk::gio::DBusCallFlags::NONE,
-            500,
-            gtk::gio::Cancellable::NONE,
+            gio::DBusCallFlags::NONE,
+            PORTAL_TIMEOUT_MS,
         )
-        .ok()?;
-    unwrap_u32(reply.child_value(0))
+    };
+    // `ReadOne` is portal version 2; `Read` (deprecated) for older ones.
+    let reply = match call("ReadOne").await {
+        Ok(reply) => Ok(reply),
+        Err(e) if e.matches(gio::DBusError::UnknownMethod) => call("Read").await,
+        Err(e) => Err(e),
+    };
+    match reply {
+        Ok(reply) => {
+            // A signal that came first is newer than this reply.
+            let known = STATE.with(|state| state.portal_scheme.get().is_some());
+            if let (false, Some(scheme)) = (known, unwrap_u32(reply.child_value(0))) {
+                set_portal_scheme(scheme);
+            }
+        }
+        Err(e) => log::debug!("cannot read the portal's color-scheme: {e}"),
+    }
 }
 
 /// The `u32` inside `value`, which `Read` wraps in one or two variants
@@ -251,32 +308,22 @@ fn unwrap_u32(mut value: gtk::glib::Variant) -> Option<u32> {
     value.get::<u32>()
 }
 
-/// Re-check the desktop's preference when it changes (portal signal, GTK
-/// theme name), once per run.
-fn watch_system() {
+/// Start following the desktop's preference (portal, GTK theme name), once
+/// per run. Returns whether this call started it.
+fn watch_system() -> bool {
     if STATE.with(|state| state.watching.replace(true)) {
-        return;
+        return false;
     }
-    let on_change = || {
-        if STATE.with(|state| *state.theme.borrow() == THEME_SYSTEM) {
-            refresh_theme();
-        }
-    };
     if let Some(settings) = gtk::Settings::default() {
-        settings.connect_gtk_theme_name_notify(move |_| on_change());
+        settings.connect_gtk_theme_name_notify(|_| {
+            if STATE.with(|state| *state.theme.borrow() == THEME_SYSTEM) {
+                refresh_theme();
+            }
+        });
     }
-    if let Some(bus) = session_bus() {
-        // The subscription lasts for the whole run.
-        let _ = bus.signal_subscribe(
-            None,
-            Some(PORTAL_SETTINGS),
-            Some("SettingChanged"),
-            Some(PORTAL_PATH),
-            Some("org.freedesktop.appearance"),
-            gtk::gio::DBusSignalFlags::NONE,
-            move |_, _, _, _, _, _| on_change(),
-        );
-    }
+    #[cfg(unix)]
+    gtk::glib::MainContext::default().spawn_local(watch_portal());
+    true
 }
 
 #[cfg(test)]

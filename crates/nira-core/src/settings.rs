@@ -280,6 +280,7 @@ impl Settings {
         };
         Settings::from_toml(&text).unwrap_or_else(|e| {
             log::warn!("cannot parse {}: {e}; using defaults", path.display());
+            crate::paths::set_aside_corrupt(&path);
             Settings::default()
         })
     }

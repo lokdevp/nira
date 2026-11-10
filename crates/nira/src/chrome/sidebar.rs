@@ -2,10 +2,14 @@
 //! bookmark ribbons, the current page ringed) and a Bookmarks tab, above
 //! a footer with the page count and book size.
 
+use std::cell::{self, RefCell};
+use std::rc::Rc;
+
 use gtk::gdk;
+use gtk::glib::ControlFlow;
 use gtk::prelude::*;
 use nira_core::i18n::{t, t_args};
-use nira_core::thumbs::reveal_value;
+use nira_core::scroll::reveal_value;
 
 use super::label;
 
@@ -14,10 +18,51 @@ pub const WIDTH: i32 = 232;
 /// A thumbnail cell's picture.
 const THUMB_W: i32 = 84;
 const THUMB_H: i32 = 122;
-/// One grid row: picture, page number, padding and spacing.
+/// Cells per grid row.
+pub const COLUMNS: usize = 2;
+/// One grid row with page numbers: picture, page number, padding and
+/// spacing. Only until the grid is laid out; then `row_metrics` measures.
 pub const ROW_H: f64 = THUMB_H as f64 + 46.0;
-/// Padding above the first row.
+/// Padding above the first row: the top padding of `flowbox.thumbview` in
+/// `style.css`.
 pub const TOP: f64 = 14.0;
+/// Clear space kept around the followed cell.
+const REVEAL_MARGIN: f64 = 14.0;
+
+/// The cell to scroll to once the grid has a layout, and whether a tick
+/// callback is waiting for that. Only the latest target counts.
+#[derive(Clone, Default)]
+struct Follow {
+    target: Rc<RefCell<Option<gtk::FlowBoxChild>>>,
+    ticking: Rc<cell::Cell<bool>>,
+}
+
+impl Follow {
+    /// Wait for the next layout, then scroll to the target. An unmapped grid
+    /// has no layout coming, so this starts again when it maps.
+    fn start(&self, scroll: &gtk::ScrolledWindow, grid: &gtk::FlowBox) {
+        if !grid.is_mapped() || self.target.borrow().is_none() || self.ticking.replace(true) {
+            return;
+        }
+        let (follow, scroll) = (self.clone(), scroll.clone());
+        // Ticks run before layout, so only a second tick has seen one.
+        let waited = cell::Cell::new(false);
+        grid.add_tick_callback(move |grid, _| {
+            let target = follow.target.borrow().clone();
+            let Some(child) = target.filter(|_| grid.is_mapped()) else {
+                follow.ticking.set(false);
+                return ControlFlow::Break;
+            };
+            if !waited.replace(true) || child.width() == 0 {
+                return ControlFlow::Continue;
+            }
+            follow.target.replace(None);
+            follow.ticking.set(false);
+            scroll_to_child(&scroll, grid, &child);
+            ControlFlow::Break
+        });
+    }
+}
 
 struct Cell {
     child: gtk::FlowBoxChild,
@@ -34,6 +79,7 @@ pub struct Sidebar {
     bookmark_count: gtk::Label,
     footer: gtk::Label,
     cells: std::cell::RefCell<Vec<Cell>>,
+    follow: Follow,
     /// The Bookmarks tab's thumbnails, by page.
     bookmark_images: std::cell::RefCell<Vec<(usize, gtk::Image)>>,
 }
@@ -64,8 +110,8 @@ impl Sidebar {
         }
 
         let grid = gtk::FlowBox::new();
-        grid.set_min_children_per_line(2);
-        grid.set_max_children_per_line(2);
+        grid.set_min_children_per_line(COLUMNS as u32);
+        grid.set_max_children_per_line(COLUMNS as u32);
         grid.set_column_spacing(10);
         grid.set_row_spacing(12);
         grid.set_selection_mode(gtk::SelectionMode::Single);
@@ -116,6 +162,12 @@ impl Sidebar {
         let footer = label("", &["sidebar-footer"]);
         footer.set_xalign(0.0);
 
+        let follow = Follow::default();
+        grid.connect_map({
+            let (follow, scroll) = (follow.clone(), scroll.clone());
+            move |grid| follow.start(&scroll, grid)
+        });
+
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
         root.add_css_class("sidebar");
         root.set_size_request(WIDTH, -1);
@@ -132,12 +184,14 @@ impl Sidebar {
             bookmark_count,
             footer,
             cells: Default::default(),
+            follow,
             bookmark_images: Default::default(),
         }
     }
 
     /// One empty cell per page. `names` are the pages' names (tooltips).
     pub fn fill(&self, names: &[String], numbers: bool) {
+        self.follow.target.replace(None);
         self.grid.remove_all();
         let mut cells = self.cells.borrow_mut();
         cells.clear();
@@ -200,13 +254,14 @@ impl Sidebar {
             return;
         };
         self.grid.select_child(&cell.child);
-        if cell.child.width() == 0 {
-            // A freshly filled grid has no layout yet: scroll once it has.
-            let (scroll, child) = (self.scroll.clone(), cell.child.clone());
-            gtk::glib::idle_add_local_once(move || scroll_to_child(&scroll, &child));
-            return;
+        if self.grid.is_mapped() && cell.child.width() > 0 {
+            self.follow.target.replace(None);
+            scroll_to_child(&self.scroll, &self.grid, &cell.child);
+        } else {
+            // No layout yet, or a hidden tab: scroll once it has one.
+            self.follow.target.replace(Some(cell.child.clone()));
+            self.follow.start(&self.scroll, &self.grid);
         }
-        scroll_to_child(&self.scroll, &cell.child);
     }
 
     /// Show ribbons on the bookmarked pages (0-based) and list them.
@@ -251,19 +306,36 @@ impl Sidebar {
     pub fn set_footer(&self, text: &str) {
         self.footer.set_text(text);
     }
+
+    /// Where the first row starts and the distance from one row to the
+    /// next, in scroll units, measured from the laid-out cells (a row's
+    /// height depends on the page numbers, the font and the theme). Before
+    /// a layout, or with a single row, the design's sizes.
+    pub fn row_metrics(&self) -> (f64, f64) {
+        let cells = self.cells.borrow();
+        let y = |i: usize| {
+            let b = cells.get(i)?.child.compute_bounds(&self.grid)?;
+            (b.height() > 0.0).then_some(b.y() as f64)
+        };
+        match (y(0), y(COLUMNS)) {
+            (Some(first), Some(second)) if second > first => (TOP + first, second - first),
+            _ => (TOP, ROW_H),
+        }
+    }
 }
 
-/// Scroll the grid just enough to show `child` and the padding around it.
-/// Measured against `scroll`: the adjustment counts the grid's padding, and
-/// bounds taken in the grid's own coordinates don't.
-fn scroll_to_child(scroll: &gtk::ScrolledWindow, child: &gtk::FlowBoxChild) {
-    let Some(bounds) = child.compute_bounds(scroll) else {
+/// Scroll the grid just enough to show `child` and the space around it.
+/// Measured against `grid`, which doesn't move with a scroll that hasn't
+/// been laid out yet; its coordinates leave out the padding the adjustment
+/// counts.
+fn scroll_to_child(scroll: &gtk::ScrolledWindow, grid: &gtk::FlowBox, child: &gtk::FlowBoxChild) {
+    let Some(bounds) = child.compute_bounds(grid) else {
         return;
     };
     let adj = scroll.vadjustment();
-    let top = adj.value() + bounds.y() as f64;
+    let top = TOP + bounds.y() as f64;
     let height = bounds.height() as f64;
-    if let Some(value) = reveal_value(adj.value(), adj.page_size(), top, height, TOP) {
+    if let Some(value) = reveal_value(adj.value(), adj.page_size(), top, height, REVEAL_MARGIN) {
         adj.set_value(value);
     }
 }

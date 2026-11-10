@@ -15,6 +15,9 @@ pub fn decode_rgba(bytes: &[u8]) -> Result<RgbaImage, String> {
 /// orientation when `exif` is set.
 pub fn decode_oriented(bytes: &[u8], exif: bool) -> Result<RgbaImage, String> {
     use image::ImageDecoder;
+    if is_jpeg2000(bytes) {
+        return decode_jpeg2000(bytes, None);
+    }
     let err = |e: image::ImageError| format!("cannot decode image: {e}");
     let reader = image::ImageReader::new(std::io::Cursor::new(bytes))
         .with_guessed_format()
@@ -30,6 +33,64 @@ pub fn decode_oriented(bytes: &[u8], exif: bool) -> Result<RgbaImage, String> {
         img.apply_orientation(o);
     }
     Ok(img.to_rgba8())
+}
+
+/// JP2 signature box, and the start of a raw codestream (SOC + SIZ markers).
+const JP2_MAGIC: &[u8] = b"\x00\x00\x00\x0C\x6A\x50\x20\x20";
+const J2C_MAGIC: &[u8] = b"\xFF\x4F\xFF\x51";
+
+/// True if `bytes` are a JPEG 2000 image (JP2/JPX file or raw codestream).
+fn is_jpeg2000(bytes: &[u8]) -> bool {
+    bytes.starts_with(JP2_MAGIC) || bytes.starts_with(J2C_MAGIC)
+}
+
+/// Decode a JPEG 2000 image to RGBA8. With `target`, the decoder may skip
+/// resolution levels and return an image down to about that size, which
+/// makes thumbnails cheap.
+///
+/// Embedded ICC profiles are not applied (comic scans are sRGB in practice);
+/// CMYK is converted with the naive formula.
+fn decode_jpeg2000(bytes: &[u8], target: Option<(u32, u32)>) -> Result<RgbaImage, String> {
+    use hayro_jpeg2000::{DecodeSettings, DecoderContext, Image};
+    let err = |e: hayro_jpeg2000::DecodeError| format!("cannot decode JPEG 2000 image: {e}");
+    let settings = DecodeSettings {
+        target_resolution: target,
+        ..DecodeSettings::default()
+    };
+    let image = Image::new(bytes, &settings).map_err(err)?;
+    let (w, h) = (image.width(), image.height());
+    let colour = image.color_space().num_channels() as usize;
+    let alpha = image.has_alpha();
+    let mut ctx = DecoderContext::default();
+    let src = image.decode(&mut ctx).map_err(err)?.data_u8();
+    let n = w as usize * h as usize;
+    let stride = colour + alpha as usize;
+    if stride == 0 || src.len() != n * stride {
+        return Err(format!(
+            "cannot decode JPEG 2000 image: {} samples for {w}x{h} with {stride} channels",
+            src.len()
+        ));
+    }
+    let mut out = Vec::with_capacity(n * 4);
+    for px in src.chunks_exact(stride) {
+        let a = if alpha { px[stride - 1] } else { 255 };
+        let [r, g, b] = match colour {
+            1 | 2 => [px[0]; 3],
+            3 => [px[0], px[1], px[2]],
+            4 => {
+                let k = 255 - px[3] as u32;
+                let ch = |c: u8| ((255 - c as u32) * k / 255) as u8;
+                [ch(px[0]), ch(px[1]), ch(px[2])]
+            }
+            _ => {
+                return Err(format!(
+                    "cannot decode JPEG 2000 image: {colour} colour channels"
+                ))
+            }
+        };
+        out.extend_from_slice(&[r, g, b, a]);
+    }
+    RgbaImage::from_raw(w, h, out).ok_or_else(|| "cannot decode JPEG 2000 image".to_string())
 }
 
 /// Apply rotation (degrees clockwise, 0/90/180/270) and flips.
@@ -149,7 +210,11 @@ pub fn thumbnail_rgba_fallback(
     max_w: u32,
     max_h: u32,
 ) -> Option<(u32, u32, Vec<u8>)> {
-    let img = decode_rgba(bytes).ok()?;
+    let img = if is_jpeg2000(bytes) {
+        decode_jpeg2000(bytes, Some((max_w, max_h))).ok()?
+    } else {
+        decode_rgba(bytes).ok()?
+    };
     let thumb = thumbnail(&img, max_w, max_h);
     let (w, h) = thumb.dimensions();
     Some((w, h, thumb.into_raw()))
@@ -224,30 +289,6 @@ pub fn auto_enhance(img: RgbaImage) -> RgbaImage {
         }
     }
     imageops::unsharpen(&out, 0.8, 4)
-}
-
-/// The `w x h` region of a `full_w x full_h` RGBA8 image whose top-left
-/// corner is at (`x`, `y`), which may lie partly or wholly outside the
-/// image; pixels outside are transparent.
-pub fn crop_rgba(full: &[u8], full_w: u32, full_h: u32, x: i64, y: i64, w: u32, h: u32) -> Vec<u8> {
-    let mut out = vec![0u8; (w as usize) * (h as usize) * 4];
-    let (fw, fh) = (full_w as i64, full_h as i64);
-    let x0 = x.max(0);
-    let x1 = (x + w as i64).min(fw);
-    if x1 <= x0 || full.len() < (fw * fh * 4) as usize {
-        return out;
-    }
-    let row_bytes = ((x1 - x0) * 4) as usize;
-    for row in 0..h as i64 {
-        let sy = y + row;
-        if sy < 0 || sy >= fh {
-            continue;
-        }
-        let src = ((sy * fw + x0) * 4) as usize;
-        let dst = ((row * w as i64 + (x0 - x)) * 4) as usize;
-        out[dst..dst + row_bytes].copy_from_slice(&full[src..src + row_bytes]);
-    }
-    out
 }
 
 /// The average colour of an image's border (`w x h` RGBA8 pixels): the
@@ -376,22 +417,6 @@ mod tests {
     }
 
     #[test]
-    fn crop_copies_inside_and_clears_outside() {
-        // 3x2 image, pixel value = index.
-        let full: Vec<u8> = (0..6u8).flat_map(|i| [i, i, i, 255]).collect();
-        assert_eq!(
-            crop_rgba(&full, 3, 2, 1, 0, 2, 2),
-            [1, 1, 1, 255, 2, 2, 2, 255, 4, 4, 4, 255, 5, 5, 5, 255]
-        );
-        // Hanging off the top-left corner: the outside is transparent.
-        let c = crop_rgba(&full, 3, 2, -1, -1, 2, 2);
-        assert_eq!(&c[..12], &[0; 12]);
-        assert_eq!(&c[12..], &[0, 0, 0, 255]);
-        // Wholly outside.
-        assert!(crop_rgba(&full, 3, 2, 10, 10, 2, 2).iter().all(|&b| b == 0));
-    }
-
-    #[test]
     fn edge_colour_averages_the_border() {
         // 3x3: white border, black centre.
         let mut px = vec![255u8; 3 * 3 * 4];
@@ -399,6 +424,40 @@ mod tests {
         assert_eq!(edge_colour(3, 3, &px), Some([255, 255, 255]));
         assert_eq!(edge_colour(1, 1, &[10, 20, 30, 255]), Some([10, 20, 30]));
         assert_eq!(edge_colour(0, 4, &[]), None);
+    }
+
+    fn fixture(name: &str) -> Vec<u8> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test/files/images")
+            .join(name);
+        std::fs::read(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+    }
+
+    #[test]
+    fn decodes_jpeg2000_files_and_codestreams() {
+        // Lossless copies of blue.png: a JP2 file and a raw codestream.
+        for name in ["blue.jp2", "blue.j2k"] {
+            let img = decode_oriented(&fixture(name), true).unwrap();
+            assert_eq!(img.dimensions(), (100, 100), "{name}");
+            assert!(img.pixels().all(|p| p.0 == [0, 0, 255, 255]), "{name}");
+        }
+    }
+
+    #[test]
+    fn jpeg2000_thumbnail_decodes_at_reduced_resolution() {
+        let bytes = fixture("blue.jp2");
+        // gdk-pixbuf has no JPEG 2000 loader; the fallback covers it.
+        assert!(thumbnail_pixbuf_rgba(&bytes, 40, 40).is_none());
+        let (w, h, rgba) = thumbnail_rgba_fallback(&bytes, 40, 40).unwrap();
+        assert_eq!((w, h), (40, 40));
+        assert_eq!(&rgba[..4], &[0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn broken_jpeg2000_is_an_error() {
+        let mut bytes = fixture("blue.jp2");
+        bytes.truncate(40);
+        assert!(decode_rgba(&bytes).is_err());
     }
 }
 
@@ -444,5 +503,28 @@ mod bench {
                 (t2 - t1).as_secs_f64() / (t1 - t0).as_secs_f64().max(1e-9)
             );
         }
+    }
+
+    /// `NIRA_BENCH_JP2=page.jp2 cargo test --release -p nira-core
+    /// jpeg2000_speed -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn jpeg2000_speed() {
+        let Ok(path) = std::env::var("NIRA_BENCH_JP2") else {
+            eprintln!("set NIRA_BENCH_JP2 to a .jp2 file");
+            return;
+        };
+        let bytes = std::fs::read(path).expect("read NIRA_BENCH_JP2");
+        let t0 = Instant::now();
+        let img = decode_rgba(&bytes).unwrap();
+        let t1 = Instant::now();
+        let (w, h, _) = thumbnail_rgba_fallback(&bytes, 160, 160).unwrap();
+        let t2 = Instant::now();
+        eprintln!(
+            "{:?}: full decode {:?}, {w}x{h} thumbnail {:?}",
+            img.dimensions(),
+            t1 - t0,
+            t2 - t1
+        );
     }
 }

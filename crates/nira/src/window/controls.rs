@@ -150,10 +150,10 @@ impl NiraWindow {
                     if win.imp().opening.get() {
                         return glib::ControlFlow::Continue;
                     }
+                    // The slideshow's own setting decides whether it goes
+                    // on into the next book, whatever the Files setting.
                     let next_book = win.imp_settings().slideshow.next_book;
-                    // `turn` opens the next book itself when the settings
-                    // allow; the slideshow then goes on in it.
-                    match win.turn(true, 1) {
+                    match win.turn_with(true, 1, next_book) {
                         Flip::PastEnd if !(next_book && win.imp().opening.get()) => {
                             win.imp().slideshow.take();
                             win.set_slideshow(false);

@@ -1,10 +1,9 @@
 //! CBZ / ZIP support via the pure-Rust `zip` crate.
 
 use std::fs::File;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use super::{sorted_pages, Archive, ArchiveError};
+use super::{read_capped, sorted_pages, too_large, Archive, ArchiveError, MAX_ENTRY_BYTES};
 
 pub struct ZipArchive {
     path: PathBuf,
@@ -35,6 +34,18 @@ impl Archive for ZipArchive {
         &self.name
     }
 
+    fn try_clone(&self) -> Option<Box<dyn Archive>> {
+        // Its own file handle: two threads seeking one shared handle would
+        // read each other's data. Reading the central directory again is cheap.
+        let archive = zip::ZipArchive::new(File::open(&self.path).ok()?).ok()?;
+        Some(Box::new(ZipArchive {
+            path: self.path.clone(),
+            name: self.name.clone(),
+            archive,
+            pages: self.pages.clone(),
+        }))
+    }
+
     fn raw_names(&mut self) -> Result<Vec<String>, ArchiveError> {
         Ok(self
             .archive
@@ -59,9 +70,13 @@ impl Archive for ZipArchive {
                 self.path.display()
             ))
         })?;
-        let mut buf = Vec::new();
-        file.read_to_end(&mut buf)?;
-        Ok(buf)
+        // The declared size is checked first, and the read is capped too,
+        // since a crafted entry may declare less than it inflates to.
+        let what = format!("'{name}'");
+        if file.size() > MAX_ENTRY_BYTES {
+            return Err(too_large(&what, MAX_ENTRY_BYTES));
+        }
+        read_capped(&mut file, MAX_ENTRY_BYTES, &what)
     }
 }
 

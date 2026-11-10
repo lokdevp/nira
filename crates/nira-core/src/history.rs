@@ -3,7 +3,7 @@
 //! "Continue reading" list. Stored as `history.json` in the data directory.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -50,10 +50,23 @@ impl History {
     }
 
     pub fn load() -> History {
-        match fs::read_to_string(Self::path()) {
-            Ok(text) => serde_json::from_str(&text).unwrap_or_default(),
-            Err(_) => History::default(),
-        }
+        Self::load_from(&Self::path())
+    }
+
+    /// Load `path`. A file that doesn't parse is moved aside (see
+    /// `paths::set_aside_corrupt`) so saving the empty list can't destroy it.
+    fn load_from(path: &Path) -> History {
+        let Ok(text) = fs::read_to_string(path) else {
+            return History::default();
+        };
+        serde_json::from_str(&text).unwrap_or_else(|e| {
+            log::warn!(
+                "cannot parse {}: {e}; starting with an empty history",
+                path.display()
+            );
+            crate::paths::set_aside_corrupt(path);
+            History::default()
+        })
     }
 
     pub fn save(&self) {

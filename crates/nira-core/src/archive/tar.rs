@@ -9,8 +9,12 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
-use super::{sorted_pages, Archive, ArchiveError, ArchiveKind};
+use super::{
+    sorted_pages, too_large, Archive, ArchiveError, ArchiveKind, TempPath, MAX_ENTRY_BYTES,
+    MAX_UNPACKED_BYTES,
+};
 
 static TMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -27,11 +31,12 @@ pub struct TarArchive {
     name: String,
     kind: Option<ArchiveKind>,
     pages: Option<Vec<String>>,
-    index: Option<TarIndex>,
+    /// Shared with clones (`try_clone`), like `unpacked`.
+    index: Option<Arc<TarIndex>>,
     /// Decompressed copy of a gzip/bzip2/xz stream, written while indexing
     /// so pages can be read by seeking instead of decompressing from the
-    /// start for every page.
-    unpacked: Option<PathBuf>,
+    /// start for every page. Shared with clones; removed with the last one.
+    unpacked: Option<Arc<TempPath>>,
 }
 
 fn open_tar_reader(
@@ -57,15 +62,26 @@ fn is_compressed(kind: Option<ArchiveKind>) -> bool {
     )
 }
 
-/// A reader that copies everything it reads into `out`.
-struct Tee<'a, R: Read> {
+/// A reader that copies everything it reads into `out`, failing once more
+/// than `limit` bytes went through (a compressed tar that unpacks to more
+/// than any comic would).
+struct Tee<'a, R: Read, W: Write> {
     inner: R,
-    out: &'a mut BufWriter<File>,
+    out: &'a mut W,
+    written: u64,
+    limit: u64,
 }
 
-impl<R: Read> Read for Tee<'_, R> {
+impl<R: Read, W: Write> Read for Tee<'_, R, W> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         let n = self.inner.read(buf)?;
+        self.written += n as u64;
+        if self.written > self.limit {
+            return Err(std::io::Error::other(format!(
+                "the archive unpacks to more than {} GiB",
+                self.limit / (1024 * 1024 * 1024)
+            )));
+        }
         self.out.write_all(&buf[..n])?;
         Ok(n)
     }
@@ -119,12 +135,14 @@ impl TarArchive {
     /// Decompress the stream into a temp file while indexing it.
     fn index_compressed(&mut self) -> Result<TarIndex, ArchiveError> {
         let n = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let tmp = std::env::temp_dir().join(format!("nira-tar-{}-{n}.tar", std::process::id()));
+        let tmp = crate::paths::unpack_dir().join(format!("tar-{n}.tar"));
         let result = (|| {
             let mut out = BufWriter::new(File::create(&tmp)?);
             let tee = Tee {
                 inner: open_tar_reader(&self.path, self.kind)?,
                 out: &mut out,
+                written: 0,
+                limit: MAX_UNPACKED_BYTES,
             };
             let (index, mut rest) = build_index(tee)?;
             // Copy the trailer too, so the temp file is a whole tar.
@@ -135,7 +153,7 @@ impl TarArchive {
         })();
         match result {
             Ok(index) => {
-                self.unpacked = Some(tmp);
+                self.unpacked = Some(Arc::new(TempPath(tmp)));
                 Ok(index)
             }
             Err(e) => {
@@ -153,15 +171,26 @@ impl TarArchive {
             } else {
                 build_index(BufReader::new(File::open(&self.path)?))?.0
             };
-            self.index = Some(index);
+            self.index = Some(Arc::new(index));
         }
-        Ok(self.index.as_ref().expect("index was just built"))
+        Ok(self.index.as_deref().expect("index was just built"))
     }
 }
 
 impl Archive for TarArchive {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn try_clone(&self) -> Option<Box<dyn Archive>> {
+        Some(Box::new(TarArchive {
+            path: self.path.clone(),
+            name: self.name.clone(),
+            kind: self.kind,
+            pages: self.pages.clone(),
+            index: self.index.clone(),
+            unpacked: self.unpacked.clone(),
+        }))
     }
 
     fn raw_names(&mut self) -> Result<Vec<String>, ArchiveError> {
@@ -185,7 +214,14 @@ impl Archive for TarArchive {
                 self.path.display()
             ))
         })?;
-        let data = self.unpacked.as_deref().unwrap_or(&self.path);
+        // The size comes from the entry's header: check it before allocating.
+        if size > MAX_ENTRY_BYTES {
+            return Err(too_large(&format!("'{name}'"), MAX_ENTRY_BYTES));
+        }
+        let data = self
+            .unpacked
+            .as_ref()
+            .map_or(self.path.as_path(), |t| t.0.as_path());
         let mut file = File::open(data)?;
         file.seek(SeekFrom::Start(offset))?;
         let mut buf = vec![0; size as usize];
@@ -194,22 +230,32 @@ impl Archive for TarArchive {
     }
 
     fn close(&mut self) {
-        if let Some(tmp) = self.unpacked.take() {
-            let _ = std::fs::remove_file(tmp);
-        }
+        // The unpacked file goes once no clone uses it (`TempPath`).
+        self.unpacked = None;
         self.index = None;
-    }
-}
-
-impl Drop for TarArchive {
-    fn drop(&mut self) {
-        self.close();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn names_like_switches_and_wildcards_are_read_as_names() {
+        use crate::archive::tricky_names::{assert_reads_like_zip, fixture};
+        for set in ["OptEntry", "GlobEntries"] {
+            for ext in ["tar", "tar.gz", "tar.bz2"] {
+                let file = format!("Solid{set}.{ext}");
+                let path = fixture(&file);
+                if !path.exists() {
+                    continue;
+                }
+                let ar = TarArchive::open(&path, detect(&path).filter(|k| *k != ArchiveKind::Tar))
+                    .unwrap();
+                assert_reads_like_zip(ar, set, &file, &[]);
+            }
+        }
+    }
     use crate::archive::detect;
 
     fn archive_path(name: &str) -> PathBuf {
@@ -237,6 +283,20 @@ mod tests {
     }
 
     #[test]
+    fn unpacking_stops_past_the_limit() {
+        let mut out = Vec::new();
+        let mut tee = Tee {
+            inner: &[0u8; 100][..],
+            out: &mut out,
+            written: 0,
+            limit: 64,
+        };
+        let err = std::io::copy(&mut tee, &mut std::io::sink()).unwrap_err();
+        assert!(err.to_string().contains("unpacks to more than"), "{err}");
+        assert!(out.len() <= 64, "nothing past the limit is written");
+    }
+
+    #[test]
     fn reads_pages_by_offset_and_removes_temp_file() {
         let mut plain = TarArchive::open(&archive_path("SolidFlat.tar"), None).unwrap();
         let pages = plain.page_names().unwrap();
@@ -255,10 +315,23 @@ mod tests {
             for (i, p) in pages.iter().enumerate().rev() {
                 assert_eq!(ar.read(p).unwrap(), want[i], "{name} {p}");
             }
-            let tmp = ar.unpacked.clone().expect("compressed tar is unpacked");
+            let tmp = ar
+                .unpacked
+                .as_ref()
+                .expect("compressed tar is unpacked")
+                .0
+                .clone();
             assert!(tmp.exists());
+            // A clone reads the same unpacked file: nothing is unpacked again.
+            let mut twin = ar.try_clone().expect("tars clone");
+            assert_eq!(twin.read(&pages[0]).unwrap(), want[0], "{name} clone");
             ar.close();
-            assert!(!tmp.exists(), "{name}: temp file removed on close");
+            assert!(tmp.exists(), "{name}: kept while a clone uses it");
+            drop(twin);
+            assert!(
+                !tmp.exists(),
+                "{name}: temp file removed with the last handle"
+            );
         }
     }
 }

@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 gdk-pixbuf.workspace = true
 image.workspace = true
+hayro-jpeg2000.workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true

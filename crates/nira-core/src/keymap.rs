@@ -178,6 +178,7 @@ impl Keymap {
         };
         Keymap::from_toml(&text).unwrap_or_else(|e| {
             log::warn!("cannot parse {}: {e}; using default keys", path.display());
+            crate::paths::set_aside_corrupt(&path);
             Keymap::default()
         })
     }
