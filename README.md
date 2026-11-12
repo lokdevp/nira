@@ -6,7 +6,7 @@
 
 <p align="center">A comic book and manga viewer for GTK4</p>
 
-Nira is a comic book and manga reader for the Linux desktop. It is written in Rust with GTK4 and is a descendant of [MComix](https://sourceforge.net/projects/mcomix/) and Comix.
+Nira is a comic book and manga reader for the Linux desktop. It is written in Rust with GTK4.
 
 ## Features
 
@@ -65,6 +65,12 @@ Each release has a `SHA256SUMS` file. In the folder holding the downloads:
 
 ```sh
 sha256sum -c --ignore-missing SHA256SUMS
+```
+
+To check that a file was built by Nira's release workflow, use the GitHub CLI:
+
+```sh
+gh attestation verify nira-1.0.0-x86_64.AppImage --repo lokdevp/nira
 ```
 
 Windows builds are not released yet.
