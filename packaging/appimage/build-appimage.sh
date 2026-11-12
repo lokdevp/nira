@@ -54,17 +54,21 @@ is_system_lib() {
         *) return 1 ;;
     esac
 }
-ldd target/release/nira | awk '/=> \//{print $3}' | sort -u | while read -r lib; do
-    if is_system_lib "$lib"; then
-        continue
-    fi
-    cp -n "$lib" "$APPDIR/usr/lib/" 2>/dev/null || true
-done
-# glibc is excluded above, but libgcc_s/libstdc++ ARE bundled (portability).
+# Copy the libraries a binary or module links to into usr/lib.
+# glibc is excluded, but libgcc_s/libstdc++ ARE bundled (portability).
+bundle_deps() {
+    ldd "$1" | awk '/=> \//{print $3}' | sort -u | while read -r lib; do
+        if ! is_system_lib "$lib"; then
+            cp -n "$lib" "$APPDIR/usr/lib/" 2>/dev/null || true
+        fi
+    done
+}
+bundle_deps target/release/nira
 
 # ---- GTK runtime data ----
 SHARE=/usr/share
-# GSettings schemas.
+# GSettings schemas. They are found through XDG_DATA_DIRS, so the host's
+# schemas stay visible too.
 if [ -f "$SHARE/glib-2.0/schemas/gschemas.compiled" ]; then
     mkdir -p "$APPDIR/usr/share/glib-2.0/schemas"
     cp "$SHARE/glib-2.0/schemas/gschemas.compiled" "$APPDIR/usr/share/glib-2.0/schemas/"
@@ -74,21 +78,39 @@ if [ -d "$SHARE/icons/Adwaita" ]; then
     mkdir -p "$APPDIR/usr/share/icons"
     cp -r "$SHARE/icons/Adwaita" "$APPDIR/usr/share/icons/"
 fi
-# gdk-pixbuf loaders + the query tool (to regenerate the cache at runtime).
-PIXBUF_LIBDIR="$(pkg-config --variable=libdir gdk-pixbuf-2.0 2>/dev/null || echo /usr/lib/x86_64-linux-gnu)"
-PIXBUF_VERSION="$(pkg-config --modversion gdk-pixbuf-2.0 2>/dev/null || echo 2.10.0)"
-LOADERS_SRC="$PIXBUF_LIBDIR/gdk-pixbuf-2.0/$PIXBUF_VERSION/loaders"
-if [ -d "$LOADERS_SRC" ]; then
-    mkdir -p "$APPDIR/usr/lib/gdk-pixbuf-2.0/$PIXBUF_VERSION/loaders"
-    cp "$LOADERS_SRC"/*.so "$APPDIR/usr/lib/gdk-pixbuf-2.0/$PIXBUF_VERSION/loaders/" 2>/dev/null || true
-fi
-if command -v gdk-pixbuf-query-loaders >/dev/null 2>&1; then
-    cp "$(command -v gdk-pixbuf-query-loaders)" "$APPDIR/usr/bin/"
-    ldd "$(command -v gdk-pixbuf-query-loaders)" | awk '/=> \//{print $3}' | sort -u | while read -r lib; do
-        if ! is_system_lib "$lib"; then
-            cp -n "$lib" "$APPDIR/usr/lib/" 2>/dev/null || true
-        fi
+
+# gdk-pixbuf loaders. GTK needs the SVG loader (librsvg) for Adwaita and the
+# symbolic icons. The bundled gdk-pixbuf looks for loaders at its build-time
+# path, which may not exist on the host, so the AppRun points it at a
+# loaders.cache listing the bundled ones. The cache needs absolute paths, so
+# it is written here with an @APPDIR@ placeholder that the AppRun fills in.
+PIXBUF_BINVER="$(pkg-config --variable=gdk_pixbuf_binary_version gdk-pixbuf-2.0)"
+PIXBUF_MODULEDIR="$(pkg-config --variable=gdk_pixbuf_moduledir gdk-pixbuf-2.0)"
+PIXBUF_QUERY="$(pkg-config --variable=gdk_pixbuf_query_loaders gdk-pixbuf-2.0)"
+LOADERS_DEST="$APPDIR/usr/lib/gdk-pixbuf-2.0/$PIXBUF_BINVER/loaders"
+mkdir -p "$LOADERS_DEST"
+if [ -d "$PIXBUF_MODULEDIR" ]; then
+    for loader in "$PIXBUF_MODULEDIR"/*.so; do
+        [ -e "$loader" ] || continue
+        cp "$loader" "$LOADERS_DEST/"
+        bundle_deps "$loader"
     done
+fi
+ABS_APPDIR="$(cd "$APPDIR" && pwd)"
+GDK_PIXBUF_MODULEDIR="$(cd "$LOADERS_DEST" && pwd)" "$PIXBUF_QUERY" \
+    | sed "s|$ABS_APPDIR|@APPDIR@|g" \
+    > "$APPDIR/usr/lib/gdk-pixbuf-2.0/$PIXBUF_BINVER/loaders.cache.in"
+echo "    $(ls "$LOADERS_DEST" | wc -l) pixbuf loaders bundled"
+
+# The dconf GSettings backend. Without it GSettings falls back to memory and
+# GTK can't see the desktop's settings (window buttons, fonts, icon theme).
+GIO_MODULEDIR="$(pkg-config --variable=giomoduledir gio-2.0)"
+if [ -f "$GIO_MODULEDIR/libdconfsettings.so" ]; then
+    mkdir -p "$APPDIR/usr/lib/gio/modules"
+    cp "$GIO_MODULEDIR/libdconfsettings.so" "$APPDIR/usr/lib/gio/modules/"
+    bundle_deps "$GIO_MODULEDIR/libdconfsettings.so"
+else
+    echo "WARNING: libdconfsettings.so not found; GTK won't read desktop settings" >&2
 fi
 
 # ---- AppRun ----
@@ -97,15 +119,18 @@ cat > "$APPDIR/AppRun" << 'APPEOF'
 SELF="$(readlink -f "$0")"
 HERE="${SELF%/*}"
 export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export GSETTINGS_SCHEMA_DIR="$HERE/usr/share/glib-2.0/schemas"
-export XDG_DATA_DIRS="$HERE/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
-# Regenerate the gdk-pixbuf loader cache with the AppImage's own paths.
-if [ -x "$HERE/usr/bin/gdk-pixbuf-query-loaders" ]; then
-    GDK_PIXBUF_MODULEDIR="$HERE/usr/lib/gdk-pixbuf-2.0"/*/loaders \
-        "$HERE/usr/bin/gdk-pixbuf-query-loaders" \
-        > "$HERE/usr/lib/gdk-pixbuf-2.0"/*/loaders.cache 2>/dev/null || true
-    export GDK_PIXBUF_MODULE_FILE=$(ls "$HERE/usr/lib/gdk-pixbuf-2.0"/*/loaders.cache 2>/dev/null | head -1)
-fi
+export XDG_DATA_DIRS="$HERE/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+export GIO_MODULE_DIR="$HERE/usr/lib/gio/modules"
+# The AppImage is mounted read-only, so the loader cache with this mount's
+# paths goes in the user's cache folder, rewritten on every launch.
+for template in "$HERE"/usr/lib/gdk-pixbuf-2.0/*/loaders.cache.in; do
+    [ -f "$template" ] || continue
+    cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/nira"
+    if mkdir -p "$cache_dir" && \
+        sed "s|@APPDIR@|$HERE|g" "$template" > "$cache_dir/appimage-loaders.cache"; then
+        export GDK_PIXBUF_MODULE_FILE="$cache_dir/appimage-loaders.cache"
+    fi
+done
 exec "$HERE/usr/bin/nira" "$@"
 APPEOF
 chmod +x "$APPDIR/AppRun"
