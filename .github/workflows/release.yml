@@ -18,7 +18,7 @@ jobs:
     name: Linux (.deb + tarball)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         run: |
@@ -48,7 +48,7 @@ jobs:
           cp target/release/nira dist/tar/
           (cd dist/tar && tar czf "../nira-${VERSION}-linux-x86_64.tar.gz" nira)
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux
           path: |
@@ -59,7 +59,7 @@ jobs:
     name: AppImage (Linux standalone)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         run: |
@@ -72,7 +72,7 @@ jobs:
       - name: Build AppImage
         run: bash packaging/appimage/build-appimage.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: appimage
           path: dist/*.AppImage
@@ -81,7 +81,7 @@ jobs:
     name: Windows (cross-compiled from Linux)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install cross toolchain
         run: |
@@ -91,7 +91,7 @@ jobs:
       - name: Cross-compile + bundle + installer
         run: bash packaging/windows/cross-build-linux.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: |
@@ -112,11 +112,11 @@ jobs:
       id-token: write      # sign the attestation through Sigstore (OIDC)
       attestations: write  # store the attestation
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: linux
           path: artifacts/linux
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: appimage
           path: artifacts/appimage
@@ -129,10 +129,10 @@ jobs:
       # Records that each file in SHA256SUMS was built by this workflow from
       # this commit. Users check it with `gh attestation verify`.
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-checksums: artifacts/SHA256SUMS
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: artifacts/**/*
           draft: true
