@@ -59,15 +59,6 @@ chmod +x nira-1.0.0-x86_64.AppImage
 
 `nira-1.0.0-linux-x86_64.tar.gz` contains just the `nira` binary. GTK 4.12 or newer must be installed.
 
-**Arch Linux**
-
-```sh
-cd packaging/arch
-makepkg -si
-```
-
-This builds the `nira-bin` package from the release tarball.
-
 **Verifying downloads**
 
 Each release has a `SHA256SUMS` file. In the folder holding the downloads:
@@ -102,7 +93,7 @@ cargo build --release      # the binary is target/release/nira
 cargo test --workspace
 ```
 
-The scripts for the `.deb` (`cargo deb -p nira`), the AppImage and the Arch package are in [`packaging/`](packaging/).
+The scripts for the `.deb` (`cargo deb -p nira`) and the AppImage are in [`packaging/`](packaging/).
 
 ## Usage
 

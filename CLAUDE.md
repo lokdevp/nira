@@ -14,7 +14,7 @@ The old app (0.4.2) is the feature reference while the UI is ported. The UI foll
 - `crates/nira/`: the GTK app, binary `nira`.
 - `i18n/<locale>/nira.ftl`: Fluent strings. `en-US` is complete, and other locales fall back to it id by id.
 - `test/files/`: fixtures. Tests find them through `env!("CARGO_MANIFEST_DIR")/../../test/files`.
-- `assets/`, `packaging/`, `debian/`: logo, Linux/Windows/AppImage/Arch packaging, `.deb` metadata. The scripts run from the workspace root.
+- `assets/`, `packaging/`, `debian/`: logo, Linux/Windows/AppImage packaging, `.deb` metadata. The scripts run from the workspace root.
 
 ## Commands (from the workspace root)
 
@@ -44,4 +44,4 @@ To look at the UI without a desktop, run it on Broadway: start `gtk4-broadwayd :
 ## Release workflow
 
 - Keep history linear: no merge commits. Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds the .deb, tarball, AppImage and Windows zip/installer and runs `cargo test --workspace --release`. The draft release it creates holds only the Linux files (.deb, tarball, AppImage) and a `SHA256SUMS`; the Windows zip/installer are only run artifacts until Windows is tested.
-- The version is `[workspace.package] version` in the root `Cargo.toml`. After a release is published, update `pkgver` in `packaging/arch/PKGBUILD` and run `updpkgsums`.
+- The version is `[workspace.package] version` in the root `Cargo.toml`.
