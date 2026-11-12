@@ -44,9 +44,14 @@ jobs:
       - name: Create standalone tarball
         run: |
           VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-          mkdir -p dist/tar
-          cp target/release/nira dist/tar/
-          (cd dist/tar && tar czf "../nira-${VERSION}-linux-x86_64.tar.gz" nira)
+          NAME="nira-${VERSION}-linux-x86_64"
+          DIR="dist/tar/$NAME"
+          mkdir -p "$DIR/bin" "$DIR/share/applications" "$DIR/share/icons"
+          cp target/release/nira "$DIR/bin/"
+          cp packaging/linux/io.github.lokdevp.Nira.desktop "$DIR/share/applications/"
+          cp -r packaging/linux/icons "$DIR/share/icons/hicolor"
+          cp packaging/linux/INSTALL-tarball.txt "$DIR/INSTALL.txt"
+          tar czf "dist/$NAME.tar.gz" -C dist/tar "$NAME"
 
       - uses: actions/upload-artifact@v7
         with:

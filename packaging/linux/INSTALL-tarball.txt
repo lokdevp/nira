@@ -1,0 +1,22 @@
+Nira for Linux (x86_64)
+
+Requirements: GTK 4.12 or newer. For RAR, PDF and LHA books, install
+unrar or 7z, mutool (mupdf-tools) and lha.
+
+Run without installing:
+
+    ./bin/nira
+
+Install for your user (~/.local/bin must be on your PATH):
+
+    cp -r bin share ~/.local/
+
+If the menu entry doesn't show up right away, run:
+
+    update-desktop-database ~/.local/share/applications
+
+Uninstall:
+
+    rm ~/.local/bin/nira
+    rm ~/.local/share/applications/io.github.lokdevp.Nira.desktop
+    rm ~/.local/share/icons/hicolor/*/apps/nira.png

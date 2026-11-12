@@ -57,7 +57,7 @@ chmod +x nira-1.0.0-x86_64.AppImage
 
 **Tarball**
 
-`nira-1.0.0-linux-x86_64.tar.gz` contains just the `nira` binary. GTK 4.12 or newer must be installed.
+`nira-1.0.0-linux-x86_64.tar.gz` contains the `nira` binary, a desktop file and icons. GTK 4.12 or newer must be installed. See `INSTALL.txt` inside for how to run or install it.
 
 **Verifying downloads**
 
