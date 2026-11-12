@@ -30,7 +30,8 @@ depends = "$auto, libgtk-4-1, libgdk-pixbuf-2.0-0, libglib2.0-0, libpango-1.0-0,
 recommends = "unrar, p7zip-full, mupdf-tools"
 assets = [
     ["target/release/nira", "usr/bin/", "755"],
-    ["../../packaging/linux/nira.desktop", "usr/share/applications/", "644"],
+    ["../../packaging/linux/io.github.lokdevp.Nira.desktop", "usr/share/applications/", "644"],
+    ["../../packaging/linux/io.github.lokdevp.Nira.metainfo.xml", "usr/share/metainfo/", "644"],
     ["../../packaging/linux/nira.xml", "usr/share/mime/packages/", "644"],
     ["../../packaging/linux/icons/**/*.png", "usr/share/icons/hicolor/", "644"],
 ]

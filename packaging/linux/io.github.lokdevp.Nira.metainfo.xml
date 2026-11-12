@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.lokdevp.Nira</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-2.0-or-later</project_license>
+
+  <name>Nira</name>
+  <summary>Read comic books and manga</summary>
+  <developer id="io.github.lokdevp">
+    <name>lokesh</name>
+  </developer>
+
+  <description>
+    <p>
+      Nira is a comic book and manga reader for the Linux desktop. It opens
+      ZIP/CBZ, RAR/CBR, 7z/CB7, TAR/CBT, LHA and PDF books as well as plain
+      folders of images.
+    </p>
+    <ul>
+      <li>Single pages or double-page spreads, and a manga mode that reads right to left</li>
+      <li>Fit to the window, width, height or size, or zoom by hand, with smart scrolling</li>
+      <li>Rotation and flipping</li>
+      <li>A page sidebar with thumbnails, bookmarks, Go to page and a slideshow</li>
+      <li>Focus mode, a magnifying lens and auto-enhance</li>
+      <li>A start screen with your reading history; books reopen where you left off</li>
+      <li>Moving on to the previous or next book in the same folder</li>
+      <li>Dark and light themes, or follow the desktop</li>
+      <li>Every key can be rebound</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.github.lokdevp.Nira.desktop</launchable>
+
+  <url type="homepage">https://github.com/lokdevp/nira</url>
+  <url type="bugtracker">https://github.com/lokdevp/nira/issues</url>
+  <url type="vcs-browser">https://github.com/lokdevp/nira</url>
+
+  <content_rating type="oars-1.1"/>
+
+  <provides>
+    <binary>nira</binary>
+  </provides>
+
+  <releases>
+    <release version="1.0.0" date="2026-11-12"/>
+  </releases>
+</component>

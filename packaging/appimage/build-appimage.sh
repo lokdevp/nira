@@ -27,13 +27,19 @@ fi
 
 echo "==> Assembling AppDir"
 rm -rf "$APPDIR"
-mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/lib" "$APPDIR/usr/share/applications"
+mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/lib" "$APPDIR/usr/share/applications" \
+    "$APPDIR/usr/share/metainfo"
 mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 
 cp target/release/nira "$APPDIR/usr/bin/"
-cp "$ROOT/packaging/linux/nira.desktop" "$APPDIR/usr/share/applications/"
+DESKTOP="$ROOT/packaging/linux/io.github.lokdevp.Nira.desktop"
+cp "$DESKTOP" "$APPDIR/usr/share/applications/"
 # appimagetool requires a .desktop file at the AppDir root.
-cp "$ROOT/packaging/linux/nira.desktop" "$APPDIR/nira.desktop"
+cp "$DESKTOP" "$APPDIR/"
+# AppStream metadata, named after the desktop file. appimagetool only looks
+# for the legacy .appdata.xml name, which AppStream still reads.
+cp "$ROOT/packaging/linux/io.github.lokdevp.Nira.metainfo.xml" \
+    "$APPDIR/usr/share/metainfo/io.github.lokdevp.Nira.appdata.xml"
 # appimagetool also requires the icon referenced by the desktop file
 # (Icon=nira) at the AppDir root.
 cp "$ROOT/packaging/linux/icons/256x256/apps/nira.png" "$APPDIR/nira.png"
