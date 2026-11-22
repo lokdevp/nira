@@ -452,6 +452,10 @@ impl NiraWindow {
     /// Open the book at `path` at page `start` (0-based; `None`: where it
     /// was left).
     pub fn open(&self, path: PathBuf, start: Option<usize>) {
+        // A relative path (typed on the command line) would be saved as-is
+        // in the history and bookmarks, and mean nothing from another
+        // directory. Not canonicalized, so symlinked paths stay as given.
+        let path = std::path::absolute(&path).unwrap_or(path);
         let imp = self.imp();
         let token = imp.open_token.get() + 1;
         imp.open_token.set(token);
