@@ -10,7 +10,7 @@
 #   - NSIS installer produced by `makensis`, which runs natively on Linux
 #
 # Usage: bash packaging/windows/cross-build-linux.sh
-# Requires: apt install mingw-w64 nsis zip zstd curl pkg-config
+# Requires: apt install mingw-w64 nsis zip zstd curl pkg-config libglib2.0-bin
 
 set -euo pipefail
 
@@ -30,8 +30,8 @@ SETUP="dist/nira-setup-${VERSION}.exe"
 
 echo "==> Installing cross toolchain (mingw-w64, nsis, zip, zstd)"
 sudo apt-get update -qq
-sudo apt-get install -y -qq mingw-w64 nsis zip zstd curl pkg-config zlib1g-dev 2>/dev/null || \
-sudo apt-get install -y -qq mingw-w64 nsis zip zstd curl pkg-config
+sudo apt-get install -y -qq mingw-w64 nsis zip zstd curl pkg-config libglib2.0-bin zlib1g-dev 2>/dev/null || \
+sudo apt-get install -y -qq mingw-w64 nsis zip zstd curl pkg-config libglib2.0-bin
 
 echo "==> Adding Rust target $TARGET"
 rustup target add "$TARGET"
@@ -39,12 +39,16 @@ rustup target add "$TARGET"
 # Packages needed to link + bundle GTK4 and friends (MSYS2 mingw-w64).
 # This is the library closure (pkg-config Requires chain + runtime libs);
 # build-only tools (python, tcl, gcc, ...) are intentionally excluded.
+# Dependencies are NOT resolved: every package must be listed. MSYS2 made
+# gcc-libs an empty meta-package, so its DLLs come from libgcc
+# (libgcc_s_seh-1.dll) and libstdc++ (libstdc++-6.dll; the mirror lists it
+# URL-encoded). The bundle check below fails the build if one is missing.
 PACKAGES="
 gtk4 gdk-pixbuf2 glib2 gettext-runtime libiconv pango cairo harfbuzz
 freetype fontconfig fribidi libpng libjpeg-turbo libtiff jbigkit lerc
 libdeflate libwebp giflib zlib zstd xz bzip2 expat brotli libunistring
 graphite2 libffi pcre2 libxml2 libdatrie libthai libepoxy graphene
-json-glib pixman lzo2 librsvg gcc-libs libwinpthread vulkan-loader
+json-glib pixman lzo2 librsvg libgcc libstdc%2B%2B libwinpthread vulkan-loader
 adwaita-icon-theme iso-codes shared-mime-info
 # GStreamer runtime: libgtk-4-1.dll hard-imports these (media support), so
 # they must be bundled or the app will not start on Windows.
@@ -60,8 +64,8 @@ if [ ! -d "$MINGW/bin" ]; then
         # (the mirror redirects; -L follows it).
         file="$(curl -fsSL "$MIRROR/" | grep -oE "mingw-w64-x86_64-$pkg-[0-9][^\"]*\.pkg\.tar\.zst" | sort -V | tail -1 || true)"
         if [ -z "$file" ]; then
-            echo "WARNING: no package found for $pkg"
-            continue
+            echo "ERROR: no package found for $pkg on $MIRROR"
+            exit 1
         fi
         if [ ! -f "$WORK/$file" ]; then
             echo "  downloading $file"
@@ -111,30 +115,31 @@ collect_deps() { # exe -> list of DLL names (first level)
 # Windows system DLLs are provided by the OS and must NOT be bundled.
 is_system_dll() {
     case "$(printf '%s' "$1" | tr 'A-Z' 'a-z')" in
-        kernel32.dll|user32.dll|gdi32.dll|advapi32.dll|shell32.dll|ole32.dll|oleaut32.dll|shlwapi.dll|ws2_32.dll|comdlg32.dll|comctl32.dll|crypt32.dll|d3d11.dll|d3d12.dll|dcomp.dll|dwmapi.dll|hid.dll|imm32.dll|opengl32.dll|setupapi.dll|shcore.dll|winmm.dll|winspool.drv|msimg32.dll|dwrite.dll|rpcrt4.dll|usp10.dll|dxgi.dll|cfgmgr32.dll|ntdll.dll|msvcrt.dll|dnsapi.dll|iphlpapi.dll|gdiplus.dll|uxtheme.dll|version.dll|bcrypt.dll|bcryptprimitives.dll|api-ms-win-*) return 0 ;;
+        kernel32.dll|user32.dll|gdi32.dll|advapi32.dll|shell32.dll|ole32.dll|oleaut32.dll|shlwapi.dll|ws2_32.dll|comdlg32.dll|comctl32.dll|crypt32.dll|d3d11.dll|d3d12.dll|dcomp.dll|dwmapi.dll|hid.dll|imm32.dll|opengl32.dll|setupapi.dll|shcore.dll|winmm.dll|winspool.drv|msimg32.dll|dwrite.dll|rpcrt4.dll|usp10.dll|dxgi.dll|cfgmgr32.dll|ntdll.dll|msvcrt.dll|dnsapi.dll|iphlpapi.dll|gdiplus.dll|uxtheme.dll|userenv.dll|version.dll|bcrypt.dll|bcryptprimitives.dll|api-ms-win-*) return 0 ;;
         *) return 1 ;;
     esac
 }
 copied=""
-copy_dll() { # name
-    local dll="$1"
+copy_dll() { # name importer
+    local dll="$1" importer="$2"
     if echo "$copied" | grep -qx "$dll"; then return; fi
     copied="$copied
 $dll"
     if is_system_dll "$dll"; then return; fi
     local src="$MINGW/bin/$dll"
     if [ ! -f "$src" ]; then
-        echo "WARNING: $dll not found in sysroot"
-        return
+        echo "ERROR: $dll (imported by $importer) is not in the sysroot."
+        echo "Add the mingw-w64 package that provides it to PACKAGES."
+        exit 1
     fi
     cp -n "$src" "$DIST_DIR/" || true
     # Recurse into the DLL's own dependencies.
     for dep in $(collect_deps "$src"); do
-        copy_dll "$dep"
+        copy_dll "$dep" "$dll"
     done
 }
 for dep in $(collect_deps "$DIST_DIR/nira.exe"); do
-    copy_dll "$dep"
+    copy_dll "$dep" nira.exe
 done
 
 echo "==> Copying GTK runtime data"
@@ -143,8 +148,12 @@ SHARE="$MINGW/share"
 if [ -d "$SHARE/glib-2.0/schemas" ]; then
     mkdir -p "$DIST_DIR/share/glib-2.0/schemas"
     cp -r "$SHARE/glib-2.0/schemas/." "$DIST_DIR/share/glib-2.0/schemas/"
-    if [ ! -f "$DIST_DIR/share/glib-2.0/schemas/gschemas.compiled" ] && command -v glib-compile-schemas >/dev/null; then
+    if [ ! -f "$DIST_DIR/share/glib-2.0/schemas/gschemas.compiled" ]; then
         glib-compile-schemas "$DIST_DIR/share/glib-2.0/schemas"
+    fi
+    if [ ! -f "$DIST_DIR/share/glib-2.0/schemas/gschemas.compiled" ]; then
+        echo "ERROR: gschemas.compiled was not created"
+        exit 1
     fi
 fi
 # Adwaita icons (needed by GTK for fallback icons).
@@ -157,6 +166,12 @@ LOADERS="$MINGW/lib/gdk-pixbuf-2.0/2.10.0/loaders"
 if [ -d "$LOADERS" ]; then
     mkdir -p "$DIST_DIR/lib/gdk-pixbuf-2.0/2.10.0/loaders"
     cp "$LOADERS"/*.dll "$DIST_DIR/lib/gdk-pixbuf-2.0/2.10.0/loaders/" 2>/dev/null || true
+    # The loaders' own imports (librsvg for SVG, ...) must be bundled too.
+    for loader in "$LOADERS"/*.dll; do
+        for dep in $(collect_deps "$loader"); do
+            copy_dll "$dep" "$(basename "$loader")"
+        done
+    done
     if [ -f "$LOADERS/loaders.cache" ]; then
         cp "$LOADERS/loaders.cache" "$DIST_DIR/lib/gdk-pixbuf-2.0/2.10.0/loaders/"
     fi

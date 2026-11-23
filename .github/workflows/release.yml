@@ -91,7 +91,7 @@ jobs:
       - name: Install cross toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y mingw-w64 nsis zip zstd curl pkg-config
+          sudo apt-get install -y mingw-w64 nsis zip zstd curl pkg-config libglib2.0-bin
 
       - name: Cross-compile + bundle + installer
         run: bash packaging/windows/cross-build-linux.sh
