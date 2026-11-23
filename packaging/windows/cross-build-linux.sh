@@ -57,9 +57,12 @@ libtheora opus libnice gnutls gmp nettle libtasn1 p11-kit libidn2 libva
 "
 
 mkdir -p "$WORK"
-if [ ! -d "$MINGW/bin" ]; then
+# The marker is written only after every package is unpacked, so a run that
+# failed partway fetches again instead of building from a partial sysroot.
+if [ ! -f "$WORK/.fetched" ]; then
     echo "==> Fetching MSYS2 mingw-w64 packages into $WORK"
-    for pkg in $PACKAGES; do
+    # Drop the comments inside PACKAGES before splitting it into names.
+    for pkg in $(printf '%s\n' "$PACKAGES" | sed 's/#.*//'); do
         # Pick the newest matching .pkg.tar.zst from the mirror listing
         # (the mirror redirects; -L follows it).
         file="$(curl -fsSL "$MIRROR/" | grep -oE "mingw-w64-x86_64-$pkg-[0-9][^\"]*\.pkg\.tar\.zst" | sort -V | tail -1 || true)"
@@ -73,6 +76,7 @@ if [ ! -d "$MINGW/bin" ]; then
         fi
         tar --zstd -xf "$WORK/$file" -C "$WORK"
     done
+    touch "$WORK/.fetched"
 fi
 
 # MSYS2 .pc files use prefix=/mingw64; PKG_CONFIG_SYSROOT_DIR rewrites that to
