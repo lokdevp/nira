@@ -1,6 +1,9 @@
 //! Nira, a comic book and manga viewer. Entry point: command line, logging
 //! and the GTK application.
 
+// A GUI program on Windows: no console window opens with it.
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 mod chrome;
 mod texture;
 mod theme;
@@ -81,6 +84,14 @@ impl From<FitArg> for FitMode {
 }
 
 fn main() -> glib::ExitCode {
+    // Started from a terminal, print --help, errors and logs there. Started
+    // from Explorer or a shortcut there is no parent console, and the call
+    // fails harmlessly.
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
+        AttachConsole(ATTACH_PARENT_PROCESS);
+    }
     let args = Args::parse();
     env_logger::Builder::new()
         .filter_level(args.log)
