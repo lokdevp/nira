@@ -17,7 +17,7 @@ use crate::texture;
 use crate::workers;
 
 impl NiraWindow {
-    pub(super) fn build_sidebar(&self) -> gtk::Overlay {
+    pub(super) fn build_sidebar(&self) -> gtk::Box {
         let side = Sidebar::new();
         side.connect_resize(glib::clone!(
             #[weak(rename_to = win)]

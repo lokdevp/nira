@@ -225,7 +225,6 @@ window.nira-main .zoom-pill > label {
 
 window.nira-main .sidebar {
   background: @nira_surface;
-  border-right: 1px solid @nira_divider;
 }
 window.nira-main .sidebar-tabs {
   padding: 10px 12px 0 12px;
@@ -246,7 +245,11 @@ window.nira-main .sidebar-tabs > button:checked {
   color: @nira_text;
   font-weight: 500;
 }
+/* The resize strip beside the sidebar's content: its width is HANDLE_W
+   in chrome/sidebar.rs, and it carries the sidebar's border. */
 window.nira-main .sidebar-handle {
+  min-width: 5px;
+  border-right: 1px solid @nira_divider;
   background: transparent;
 }
 window.nira-main .sidebar-handle:hover {

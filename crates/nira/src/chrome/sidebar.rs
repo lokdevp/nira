@@ -22,15 +22,18 @@ const THUMB_W: i32 = 84;
 const THUMB_H: i32 = 122;
 /// The smallest picture two columns shrink to before dropping to one.
 const MIN_THUMB_W: i32 = 64;
+/// The drag handle beside the content on the right edge, with the
+/// sidebar's border: `min-width` 5 plus `border-right` 1 in `style.css`.
+/// Beside the content rather than over it, so it doesn't cover the Pages
+/// scrollbar.
+const HANDLE_W: i32 = 6;
 /// Space around the pictures, from `style.css`: the grid's side padding
 /// (12 + 12), each cell's padding and border (4 + 2 on each side), the
-/// column spacing (10) and the sidebar's right border (1).
-const ONE_COLUMN_EXTRA: i32 = 24 + 12 + 1;
-const TWO_COLUMN_EXTRA: i32 = 24 + 2 * 12 + 10 + 1;
+/// column spacing (10) and the handle.
+const ONE_COLUMN_EXTRA: i32 = 24 + 12 + HANDLE_W;
+const TWO_COLUMN_EXTRA: i32 = 24 + 2 * 12 + 10 + HANDLE_W;
 /// The narrowest sidebar: one full-size column.
 pub const MIN_WIDTH: i32 = THUMB_W + ONE_COLUMN_EXTRA;
-/// The width of the drag handle on the right edge.
-const HANDLE_W: i32 = 6;
 /// One grid row with page numbers, beyond the picture: page number,
 /// padding and spacing. Only until the grid is laid out; then
 /// `row_metrics` measures.
@@ -101,7 +104,7 @@ type ResizeFn = Box<dyn Fn(i32, bool)>;
 /// What a width change touches, shared with the drag handle's gestures.
 #[derive(Clone)]
 struct Sizer {
-    root: gtk::Overlay,
+    root: gtk::Box,
     grid: gtk::FlowBox,
     scroll: gtk::ScrolledWindow,
     cells: Rc<RefCell<Vec<Cell>>>,
@@ -298,7 +301,7 @@ impl Sizer {
 }
 
 pub struct Sidebar {
-    pub root: gtk::Overlay,
+    pub root: gtk::Box,
     pub grid: gtk::FlowBox,
     pub scroll: gtk::ScrolledWindow,
     pub bookmarks: gtk::ListBox,
@@ -419,10 +422,11 @@ impl Sidebar {
         column.append(&tabs);
         column.append(&stack);
         column.append(&footer);
-        let root = gtk::Overlay::new();
+        column.set_hexpand(true);
+        let root = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         root.add_css_class("sidebar");
         root.set_hexpand(false);
-        root.set_child(Some(&column));
+        root.append(&column);
 
         let cells: Rc<RefCell<Vec<Cell>>> = Default::default();
         let sizer = Sizer {
@@ -443,7 +447,7 @@ impl Sidebar {
             on_resize: Default::default(),
         };
         sizer.set_width(WIDTH);
-        root.add_overlay(&resize_handle(&sizer));
+        root.append(&resize_handle(&sizer));
 
         Sidebar {
             root,
@@ -609,8 +613,6 @@ impl Sidebar {
 fn resize_handle(sizer: &Sizer) -> gtk::Box {
     let handle = gtk::Box::new(gtk::Orientation::Vertical, 0);
     handle.add_css_class("sidebar-handle");
-    handle.set_size_request(HANDLE_W, -1);
-    handle.set_halign(gtk::Align::End);
     handle.set_cursor_from_name(Some("col-resize"));
 
     let on_edge = {
