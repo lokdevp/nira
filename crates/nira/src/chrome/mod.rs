@@ -16,6 +16,8 @@ pub mod welcome;
 
 use gtk::prelude::*;
 
+use crate::theme::px;
+
 pub fn icon_button(icon: &str, tooltip: &str, action: &str) -> gtk::Button {
     let b = gtk::Button::from_icon_name(icon);
     b.add_css_class("icon-btn");
@@ -67,7 +69,7 @@ pub fn label(text: &str, classes: &[&str]) -> gtk::Label {
 /// A segmented control over a string-state action: one button per
 /// `(label, target)`. The action's state checks the matching button.
 pub fn segmented(action: &str, items: &[(&str, &str)]) -> gtk::Box {
-    let group = gtk::Box::new(gtk::Orientation::Horizontal, 2);
+    let group = gtk::Box::new(gtk::Orientation::Horizontal, px(2));
     group.add_css_class("segmented");
     group.set_valign(gtk::Align::Center);
     for (text, target) in items {

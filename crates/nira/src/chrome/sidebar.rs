@@ -14,6 +14,12 @@ use nira_core::i18n::{t, t_args};
 use nira_core::scroll::reveal_value;
 
 use super::label;
+use crate::theme::{px, pxf, unpx};
+
+// Sizes here are logical pixels, as in the design and `style.css`. The
+// sizer works on screen, at the interface size (`theme::px`); widths go
+// in and out of `Sidebar` logical, so the saved width means the same at
+// any interface size.
 
 /// The design's sidebar width, and the widest it gets.
 pub const WIDTH: i32 = 232;
@@ -98,7 +104,13 @@ pub fn grid_for(width: i32) -> (usize, i32, i32) {
     (columns, thumb_w, thumb_w * THUMB_H / THUMB_W)
 }
 
-/// Called with the new width and whether the drag ended.
+/// `grid_for` for a width on screen, with the sizes on screen.
+fn grid_on_screen(width: i32) -> (usize, i32, i32) {
+    let (columns, w, h) = grid_for(unpx(width));
+    (columns, px(w), px(h))
+}
+
+/// Called with the new (logical) width and whether the drag ended.
 type ResizeFn = Box<dyn Fn(i32, bool)>;
 
 /// What a width change touches, shared with the drag handle's gestures.
@@ -133,14 +145,14 @@ impl Sizer {
     /// Set the width (clamped) and lay the grid out for it. Returns whether
     /// it changed.
     fn set_width(&self, width: i32) -> bool {
-        let width = width.clamp(MIN_WIDTH, WIDTH);
+        let width = width.clamp(px(MIN_WIDTH), px(WIDTH));
         if self.width.get() == width {
             return false;
         }
         self.hold_top();
         self.width.set(width);
         self.root.set_size_request(width, -1);
-        let (columns, w, h) = grid_for(width);
+        let (columns, w, h) = grid_on_screen(width);
         if self.columns.replace(columns) != columns {
             self.grid.set_min_children_per_line(columns as u32);
             self.grid.set_max_children_per_line(columns as u32);
@@ -219,7 +231,7 @@ impl Sizer {
             let (_, row_h) = self.row_metrics();
             let adj = self.scroll.vadjustment();
             let max = (adj.upper() - adj.page_size()).max(adj.lower());
-            let value = TOP + b.y() as f64 + fraction * row_h;
+            let value = pxf(TOP) + b.y() as f64 + fraction * row_h;
             adj.set_value(value.clamp(adj.lower(), max));
         }
         self.restored.set(self.changes.get());
@@ -239,7 +251,7 @@ impl Sizer {
     /// still to come.
     fn drag_ended(&self) {
         self.dragging.set(false);
-        let shown = self.root.width().min(WIDTH);
+        let shown = self.root.width().min(px(WIDTH));
         if shown > self.width.get() {
             self.set_width(shown);
         }
@@ -281,8 +293,8 @@ impl Sizer {
             (b.height() > 0.0).then_some(b.y() as f64)
         };
         match (y(0), y(self.columns.get())) {
-            (Some(first), Some(second)) if second > first => (TOP + first, second - first),
-            _ => (TOP, self.thumb.get().1 as f64 + ROW_EXTRA),
+            (Some(first), Some(second)) if second > first => (pxf(TOP) + first, second - first),
+            _ => (pxf(TOP), self.thumb.get().1 as f64 + pxf(ROW_EXTRA)),
         }
     }
 
@@ -295,7 +307,7 @@ impl Sizer {
 
     fn notify(&self, done: bool) {
         if let Some(f) = self.on_resize.borrow().as_ref() {
-            f(self.width.get(), done);
+            f(unpx(self.width.get()), done);
         }
     }
 }
@@ -324,7 +336,7 @@ pub struct BookmarkRow {
 
 impl Sidebar {
     pub fn new() -> Sidebar {
-        let tabs = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        let tabs = gtk::Box::new(gtk::Orientation::Horizontal, px(4));
         tabs.add_css_class("sidebar-tabs");
         // Each tab is a label, or in one-column mode an icon with the label
         // as tooltip; the labels ellipsize rather than hold the sidebar wide.
@@ -333,7 +345,7 @@ impl Sidebar {
             label.set_ellipsize(gtk::pango::EllipsizeMode::End);
             let icon = gtk::Image::from_icon_name(icon);
             icon.set_visible(false);
-            let b = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+            let b = gtk::Box::new(gtk::Orientation::Horizontal, px(6));
             b.append(&icon);
             b.append(&label);
             let button = gtk::ToggleButton::new();
@@ -355,8 +367,8 @@ impl Sidebar {
         }
 
         let grid = gtk::FlowBox::new();
-        grid.set_column_spacing(10);
-        grid.set_row_spacing(12);
+        grid.set_column_spacing(px(10) as u32);
+        grid.set_row_spacing(px(12) as u32);
         grid.set_selection_mode(gtk::SelectionMode::Single);
         grid.set_activate_on_single_click(true);
         grid.set_homogeneous(true);
@@ -372,7 +384,7 @@ impl Sidebar {
         bookmarks.set_selection_mode(gtk::SelectionMode::None);
         bookmarks.set_activate_on_single_click(true);
         let bookmarks_empty = label(&t("sidebar-no-bookmarks"), &["dim"]);
-        bookmarks_empty.set_margin_top(24);
+        bookmarks_empty.set_margin_top(px(24));
         bookmarks_empty.set_wrap(true);
         let bm_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
         bm_box.append(&bookmarks);
@@ -438,7 +450,7 @@ impl Sidebar {
             tab_icons: Rc::new([pages_icon, bookmarks_icon]),
             width: Rc::new(cell::Cell::new(0)),
             columns: Rc::new(cell::Cell::new(0)),
-            thumb: Rc::new(cell::Cell::new((THUMB_W, THUMB_H))),
+            thumb: Rc::new(cell::Cell::new((px(THUMB_W), px(THUMB_H)))),
             anchor: Default::default(),
             dragging: Default::default(),
             changes: Default::default(),
@@ -446,7 +458,7 @@ impl Sidebar {
             on_layout: Default::default(),
             on_resize: Default::default(),
         };
-        sizer.set_width(WIDTH);
+        sizer.set_width(px(WIDTH));
         root.append(&resize_handle(&sizer));
 
         Sidebar {
@@ -464,9 +476,9 @@ impl Sidebar {
         }
     }
 
-    /// Set the width, clamped to what the sidebar allows.
+    /// Set the (logical) width, clamped to what the sidebar allows.
     pub fn set_width(&self, width: i32) {
-        self.sizer.set_width(width);
+        self.sizer.set_width(px(width));
     }
 
     /// Thumbnails per grid row at the current width.
@@ -487,7 +499,7 @@ impl Sidebar {
         let mut cells = self.cells.borrow_mut();
         cells.clear();
         for (idx, name) in names.iter().enumerate() {
-            let cell = gtk::Box::new(gtk::Orientation::Vertical, 6);
+            let cell = gtk::Box::new(gtk::Orientation::Vertical, px(6));
             let overlay = gtk::Overlay::new();
             let picture = gtk::Picture::new();
             picture.set_can_shrink(true);
@@ -500,7 +512,7 @@ impl Sidebar {
             ribbon.add_css_class("ribbon");
             ribbon.set_halign(gtk::Align::End);
             ribbon.set_valign(gtk::Align::Start);
-            ribbon.set_margin_end(4);
+            ribbon.set_margin_end(px(4));
             ribbon.set_visible(false);
             overlay.add_overlay(&ribbon);
             cell.append(&overlay);
@@ -566,9 +578,9 @@ impl Sidebar {
         let mut images = self.bookmark_images.borrow_mut();
         images.clear();
         for row in rows {
-            let b = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+            let b = gtk::Box::new(gtk::Orientation::Horizontal, px(10));
             let image = gtk::Image::new();
-            image.set_pixel_size(44);
+            image.set_pixel_size(px(44));
             if let Some(tex) = &row.thumb {
                 image.set_paintable(Some(tex));
             }
@@ -617,7 +629,7 @@ fn resize_handle(sizer: &Sizer) -> gtk::Box {
 
     let on_edge = {
         let root = sizer.root.clone();
-        move |x: f64| x >= (root.width() - HANDLE_W) as f64
+        move |x: f64| x >= (root.width() - px(HANDLE_W)) as f64
     };
     // The width the drag started from, while one is under way.
     let start: Rc<cell::Cell<Option<i32>>> = Default::default();
@@ -661,7 +673,7 @@ fn resize_handle(sizer: &Sizer) -> gtk::Box {
         let sizer = sizer.clone();
         move |_, n, x, _| {
             if n == 2 && on_edge(x) {
-                sizer.drag_to(WIDTH, true);
+                sizer.drag_to(px(WIDTH), true);
             }
         }
     });
@@ -682,9 +694,9 @@ fn scroll_to_child(scroll: &gtk::ScrolledWindow, grid: &gtk::FlowBox, child: &gt
         return;
     };
     let adj = scroll.vadjustment();
-    let top = TOP + bounds.y() as f64;
+    let top = pxf(TOP) + bounds.y() as f64;
     let height = bounds.height() as f64;
-    if let Some(value) = reveal_value(adj.value(), adj.page_size(), top, height, REVEAL_MARGIN) {
+    if let Some(value) = reveal_value(adj.value(), adj.page_size(), top, height, pxf(REVEAL_MARGIN)) {
         adj.set_value(value);
     }
 }

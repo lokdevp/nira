@@ -5,6 +5,7 @@ use gtk::prelude::*;
 use nira_core::i18n::t;
 
 use super::{accel_label, kbd, label};
+use crate::theme::px;
 
 pub struct StatusBar {
     pub root: gtk::Box,
@@ -25,7 +26,7 @@ pub struct PageStatus {
 
 impl StatusBar {
     pub fn new() -> StatusBar {
-        let root = gtk::Box::new(gtk::Orientation::Horizontal, 18);
+        let root = gtk::Box::new(gtk::Orientation::Horizontal, px(18));
         root.add_css_class("statusbar");
         let dims = gtk::Label::new(None);
         let file = label("", &["mono"]);
@@ -39,14 +40,14 @@ impl StatusBar {
         root.append(&spacer);
 
         let hint = |keys: &gtk::Box, text: &str| {
-            let b = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+            let b = gtk::Box::new(gtk::Orientation::Horizontal, px(6));
             b.append(keys);
             b.append(&gtk::Label::new(Some(text)));
             root.append(&b);
         };
-        let turn_keys = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        let turn_keys = gtk::Box::new(gtk::Orientation::Horizontal, px(4));
         hint(&turn_keys, &t("hint-turn-page"));
-        let focus_keys = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+        let focus_keys = gtk::Box::new(gtk::Orientation::Horizontal, px(4));
         hint(&focus_keys, &t("hint-focus-mode"));
         StatusBar {
             root,

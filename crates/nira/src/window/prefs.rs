@@ -6,10 +6,13 @@ use gtk::glib;
 use gtk::prelude::*;
 use nira_core::i18n::t;
 use nira_core::settings::{Settings, THEME_SYSTEM};
+
+/// The interface sizes Preferences offers, in percent, after "Automatic".
+const UI_SCALES: [u32; 5] = [100, 125, 150, 175, 200];
 use nira_core::zoom::{FitMode, FitSizeAxis};
 
 use super::NiraWindow;
-use crate::theme;
+use crate::theme::{self, px};
 
 /// A page of the dialog: rows of label and control.
 struct Page {
@@ -18,11 +21,11 @@ struct Page {
 
 impl Page {
     fn new() -> Page {
-        let root = gtk::Box::new(gtk::Orientation::Vertical, 14);
-        root.set_margin_top(18);
-        root.set_margin_bottom(18);
-        root.set_margin_start(18);
-        root.set_margin_end(18);
+        let root = gtk::Box::new(gtk::Orientation::Vertical, px(14));
+        root.set_margin_top(px(18));
+        root.set_margin_bottom(px(18));
+        root.set_margin_start(px(18));
+        root.set_margin_end(px(18));
         Page { root }
     }
 
@@ -30,13 +33,13 @@ impl Page {
         let l = gtk::Label::new(Some(text));
         l.add_css_class("heading");
         l.set_xalign(0.0);
-        l.set_margin_top(6);
+        l.set_margin_top(px(6));
         self.root.append(&l);
     }
 
     fn row(&self, title: &str, hint: Option<&str>, control: &impl IsA<gtk::Widget>) {
-        let r = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-        let text = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        let r = gtk::Box::new(gtk::Orientation::Horizontal, px(12));
+        let text = gtk::Box::new(gtk::Orientation::Vertical, px(2));
         text.set_hexpand(true);
         let l = gtk::Label::new(Some(title));
         l.set_xalign(0.0);
@@ -112,6 +115,7 @@ impl NiraWindow {
         &self,
         page: &Page,
         title: &str,
+        hint: Option<&str>,
         options: &[String],
         get: fn(&Settings) -> u32,
         set: fn(&mut Settings, u32),
@@ -127,7 +131,7 @@ impl NiraWindow {
                 win.pref(|st| set(st, i));
             }
         ));
-        page.row(title, None, &dd);
+        page.row(title, hint, &dd);
     }
 
     /// Push the settings the dialog changes into the reader and the window.
@@ -179,8 +183,8 @@ impl NiraWindow {
             .title(t("prefs-title"))
             .transient_for(self)
             .modal(true)
-            .default_width(560)
-            .default_height(640)
+            .default_width(px(560))
+            .default_height(px(640))
             .build();
         let notebook = gtk::Notebook::new();
         let tab = |page: &Page, title: &str| {
@@ -199,6 +203,7 @@ impl NiraWindow {
         self.pref_choice(
             &p,
             &t("prefs-theme"),
+            None,
             &themes,
             |s| {
                 theme::THEMES
@@ -214,6 +219,28 @@ impl NiraWindow {
                 .to_string()
             },
         );
+        // Applied at startup, before any widget is built.
+        let mut sizes = vec![t("prefs-ui-scale-auto")];
+        sizes.extend(UI_SCALES.iter().map(|p| format!("{p} %")));
+        self.pref_choice(
+            &p,
+            &t("prefs-ui-scale"),
+            Some(&t("prefs-ui-scale-hint")),
+            &sizes,
+            |s| {
+                s.appearance.ui_scale_percent().map_or(0, |p| {
+                    // The nearest offered size, for a hand-edited value.
+                    let i = UI_SCALES.iter().enumerate().min_by_key(|(_, o)| o.abs_diff(p));
+                    i.map_or(0, |(i, _)| i as u32 + 1)
+                })
+            },
+            |s, i| {
+                s.appearance.ui_scale = match i.checked_sub(1) {
+                    Some(i) => UI_SCALES.get(i as usize).copied().unwrap_or(0),
+                    None => 0,
+                }
+            },
+        );
         p.heading(&t("prefs-fit"));
         let fits: Vec<String> = FitMode::ALL
             .iter()
@@ -222,6 +249,7 @@ impl NiraWindow {
         self.pref_choice(
             &p,
             &t("prefs-default-fit"),
+            None,
             &fits,
             |s| s.view.fit.index(),
             |s, i| s.view.fit = FitMode::from_index(i),
@@ -234,6 +262,7 @@ impl NiraWindow {
         self.pref_choice(
             &p,
             &t("prefs-fit-size-axis"),
+            None,
             &axes,
             |s| match s.view.fit_size.axis {
                 FitSizeAxis::Width => 0,

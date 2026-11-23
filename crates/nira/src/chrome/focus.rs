@@ -6,6 +6,7 @@ use gtk::prelude::*;
 use nira_core::i18n::t;
 
 use super::{kbd, label};
+use crate::theme::px;
 
 pub struct FocusOverlay {
     pub hint: gtk::Box,
@@ -16,16 +17,16 @@ pub struct FocusOverlay {
 
 impl FocusOverlay {
     pub fn new() -> FocusOverlay {
-        let hint = gtk::Box::new(gtk::Orientation::Horizontal, 14);
+        let hint = gtk::Box::new(gtk::Orientation::Horizontal, px(14));
         hint.add_css_class("focus-hint");
         hint.add_css_class("autohide");
         hint.set_halign(gtk::Align::Center);
         hint.set_valign(gtk::Align::Start);
-        hint.set_margin_top(18);
+        hint.set_margin_top(px(18));
         hint.append(&gtk::Label::new(Some(&t("focus-hint"))));
         let exit = gtk::Button::new();
         let exit_key = kbd("Esc");
-        let content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+        let content = gtk::Box::new(gtk::Orientation::Horizontal, px(8));
         content.append(&exit_key);
         content.append(&gtk::Label::new(Some(&t("focus-exit"))));
         exit.set_child(Some(&content));
@@ -36,8 +37,8 @@ impl FocusOverlay {
         let label = label("", &["mono", "focus-label"]);
         label.set_halign(gtk::Align::End);
         label.set_valign(gtk::Align::End);
-        label.set_margin_end(20);
-        label.set_margin_bottom(14);
+        label.set_margin_end(px(20));
+        label.set_margin_bottom(px(14));
         label.set_can_target(false);
 
         let progress = gtk::ProgressBar::new();

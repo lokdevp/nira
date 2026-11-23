@@ -96,6 +96,10 @@ pub struct Appearance {
     pub show_focus_progress: bool,
     /// UI language (`"auto"` follows the system locale).
     pub language: String,
+    /// Interface size in percent, or 0 to follow the display (only needed
+    /// where GTK can't scale by fractions, as on Windows). Read through
+    /// `ui_scale_percent`.
+    pub ui_scale: u32,
 }
 
 impl Appearance {
@@ -107,7 +111,17 @@ impl Appearance {
             (self.show_thumbnails, self.show_view_panel)
         }
     }
+
+    /// The chosen interface size in percent (100–200), or `None` to
+    /// follow the display.
+    pub fn ui_scale_percent(&self) -> Option<u32> {
+        (self.ui_scale != 0).then(|| self.ui_scale.clamp(UI_SCALE_MIN, UI_SCALE_MAX))
+    }
 }
+
+/// The interface sizes, in percent, that `Appearance::ui_scale` allows.
+pub const UI_SCALE_MIN: u32 = 100;
+pub const UI_SCALE_MAX: u32 = 200;
 
 impl Default for Appearance {
     fn default() -> Self {
@@ -125,6 +139,7 @@ impl Default for Appearance {
             show_page_bar: true,
             show_focus_progress: true,
             language: "auto".to_string(),
+            ui_scale: 0,
         }
     }
 }
@@ -336,6 +351,18 @@ mod tests {
         a.focus_show_view_panel = true;
         assert_eq!(a.panels(false), (true, false));
         assert_eq!(a.panels(true), (false, true));
+    }
+
+    #[test]
+    fn interface_size_follows_the_display_or_is_clamped() {
+        let mut a = Appearance::default();
+        assert_eq!(a.ui_scale_percent(), None, "follows the display by default");
+        a.ui_scale = 150;
+        assert_eq!(a.ui_scale_percent(), Some(150));
+        a.ui_scale = 50;
+        assert_eq!(a.ui_scale_percent(), Some(UI_SCALE_MIN));
+        a.ui_scale = 900;
+        assert_eq!(a.ui_scale_percent(), Some(UI_SCALE_MAX));
     }
 
     #[test]

@@ -122,6 +122,8 @@ fn activate(app: &gtk::Application, args: &Args) {
     // embedded copy when it isn't installed.
     theme::ensure_app_icon();
     gtk::Window::set_default_icon_name("nira");
+    // Before the stylesheet and any widget, which are sized by it.
+    theme::set_ui_scale(settings.appearance.ui_scale_percent());
     theme::load_css();
     theme::apply_theme(&settings.appearance.theme);
     let reopen = settings.files.reopen_last;

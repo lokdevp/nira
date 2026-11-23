@@ -11,6 +11,7 @@ use nira_core::zoom::{FitMode, ZoomModel};
 use super::NiraWindow;
 use crate::chrome::toolbar::Toolbar;
 use crate::texture::{self, SizedPaintable};
+use crate::theme::px;
 
 impl NiraWindow {
     /// The area pages are fitted into. Before the window is mapped the
@@ -252,11 +253,11 @@ impl NiraWindow {
             .modal(true)
             .resizable(false)
             .build();
-        let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-        row.set_margin_top(16);
-        row.set_margin_bottom(16);
-        row.set_margin_start(16);
-        row.set_margin_end(16);
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, px(10));
+        row.set_margin_top(px(16));
+        row.set_margin_bottom(px(16));
+        row.set_margin_start(px(16));
+        row.set_margin_end(px(16));
         let spin = gtk::SpinButton::with_range(1.0, total as f64, 1.0);
         spin.set_value(page as f64);
         let of = gtk::Label::new(Some(&format!("/ {total}")));

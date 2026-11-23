@@ -1,5 +1,5 @@
-//! The app stylesheet and its colour themes, the window icon and the
-//! runtime viewer background.
+//! The app stylesheet and its colour themes, the window icon, the
+//! runtime viewer background and the interface size.
 
 use std::cell::{Cell, OnceCell, RefCell};
 
@@ -80,6 +80,135 @@ pub fn theme_def(id: &str) -> &'static ThemeDef {
         .unwrap_or(&THEMES[0])
 }
 
+/// The interface size: a factor on every size the app sets itself (its
+/// stylesheet's px and the sizes in code). GTK on Windows scales only by
+/// whole numbers, so at 150 % it draws at 100 % and this makes up the rest.
+/// Set once at startup, before any widget is built.
+pub fn ui_scale() -> f64 {
+    UI_SCALE.with(Cell::get)
+}
+
+/// `n` logical pixels at the interface size.
+pub fn px(n: i32) -> i32 {
+    (n as f64 * ui_scale()).round() as i32
+}
+
+/// `n` logical pixels at the interface size, for sizes kept as floats.
+pub fn pxf(n: f64) -> f64 {
+    n * ui_scale()
+}
+
+/// Back from a size on screen to logical pixels (for sizes that are saved).
+pub fn unpx(n: i32) -> i32 {
+    (n as f64 / ui_scale()).round() as i32
+}
+
+/// Pick the interface size from the setting (percent, or `None` to follow
+/// the display), and size GTK's own text (dialogs, menus, tooltips) to
+/// match: its font sizes are in points, which follow the DPI, while the
+/// app's px sizes don't.
+pub fn set_ui_scale(percent: Option<u32>) {
+    let f = percent.map_or_else(display_scale, |p| p as f64 / 100.0);
+    UI_SCALE.with(|c| c.set(f));
+    log::debug!("interface size {:.0} %", f * 100.0);
+    if f != 1.0 {
+        if let Some(settings) = gtk::Settings::default() {
+            // -1 is GTK's default of 96 dpi; the value is in 1/1024 dpi.
+            let base = match settings.gtk_xft_dpi() {
+                d if d > 0 => d as f64,
+                _ => 96.0 * 1024.0,
+            };
+            settings.set_gtk_xft_dpi((base * f).round() as i32);
+        }
+    }
+}
+
+/// The scale the display asks for beyond what GTK applies itself. On
+/// Windows that is the display's scale over GTK's whole-number one (1.5 at
+/// 150 %, 1.0 at 200 %, which GTK draws at 2); elsewhere GTK scales by
+/// fractions itself.
+fn display_scale() -> f64 {
+    #[cfg(windows)]
+    {
+        use gtk::prelude::*;
+        // SAFETY: no arguments; returns the system DPI (96 at 100 %).
+        let dpi = unsafe { windows_sys::Win32::UI::HiDpi::GetDpiForSystem() };
+        let gdk_scale = gdk::Display::default()
+            .and_then(|d| d.monitors().item(0))
+            .and_then(|m| m.downcast::<gdk::Monitor>().ok())
+            .map_or(1, |m| m.scale_factor().max(1));
+        if dpi > 0 {
+            let f = dpi as f64 / 96.0 / gdk_scale as f64;
+            log::debug!("display: {dpi} dpi, GTK scale {gdk_scale}");
+            return f.clamp(1.0, 2.0);
+        }
+    }
+    1.0
+}
+
+/// `css` with every length in px multiplied by `f`, rounded to a hundredth
+/// (`13px` is `19.5px` at 1.5). Nothing else changes.
+fn scale_px(css: &str, f: f64) -> String {
+    if f == 1.0 {
+        return css.to_string();
+    }
+    let bytes = css.as_bytes();
+    let mut out = String::with_capacity(css.len() + css.len() / 8);
+    let mut i = 0;
+    let mut copied = 0;
+    while i < bytes.len() {
+        let c = bytes[i];
+        // A number starts at a digit (or a '.' before one) that doesn't
+        // continue a name such as `h1` or a colour such as `#1e1e2e`. A '-'
+        // before it is a sign unless it follows a name (`col-2`).
+        let word = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'#' | b'_' | b'.');
+        let in_name = match i.checked_sub(1).map(|j| bytes[j]) {
+            Some(b'-') => i >= 2 && word(bytes[i - 2]),
+            Some(b) => word(b),
+            None => false,
+        };
+        let number = c.is_ascii_digit()
+            || (c == b'.' && bytes.get(i + 1).is_some_and(u8::is_ascii_digit));
+        if !number || in_name {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b'.') {
+            i += 1;
+        }
+        let unit_px = css[i..].starts_with("px")
+            && !bytes.get(i + 2).is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'-');
+        if !unit_px {
+            continue;
+        }
+        let Ok(n) = css[start..i].parse::<f64>() else {
+            continue;
+        };
+        out.push_str(&css[copied..start]);
+        let v = (n * f * 100.0).round() / 100.0;
+        out.push_str(&format!("{v}"));
+        copied = i;
+    }
+    out.push_str(&css[copied..]);
+    out
+}
+
+/// Icon sizes at the interface size (GTK's own sizes, which `scale_px`
+/// can't reach): the size icons inherit from their window, and GTK's two
+/// icon size classes.
+fn icon_css(f: f64) -> String {
+    if f == 1.0 {
+        return String::new();
+    }
+    let (normal, large) = ((16.0 * f).round(), (32.0 * f).round());
+    format!(
+        "\nwindow, popover {{ -gtk-icon-size: {normal}px; }}\n\
+         .normal-icons {{ -gtk-icon-size: {normal}px; }}\n\
+         .large-icons {{ -gtk-icon-size: {large}px; }}\n"
+    )
+}
+
 /// Install the stylesheet for the whole display (once), with the default
 /// theme until `apply_theme` picks one.
 pub fn load_css() {
@@ -98,7 +227,9 @@ fn load_palette(theme: &'static ThemeDef) {
             add_provider(&p, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
             p
         });
-        provider.load_from_string(&format!("{}\n{STYLE}", theme.css));
+        let f = ui_scale();
+        let css = scale_px(&format!("{}\n{STYLE}", theme.css), f) + &icon_css(f);
+        provider.load_from_string(&css);
     });
 }
 
@@ -112,6 +243,7 @@ thread_local! {
     /// Reused for every background change, so changes don't stack
     /// providers.
     static BACKGROUND: OnceCell<gtk::CssProvider> = const { OnceCell::new() };
+    static UI_SCALE: Cell<f64> = const { Cell::new(1.0) };
     static STATE: ThemeState = ThemeState::default();
 }
 
@@ -330,6 +462,28 @@ fn watch_system() -> bool {
 mod tests {
     use super::*;
     use std::collections::BTreeSet;
+
+    #[test]
+    fn scale_px_scales_only_px_lengths() {
+        assert_eq!(scale_px("a { font-size: 13px; }", 1.5), "a { font-size: 19.5px; }");
+        assert_eq!(
+            scale_px("a { margin: 0 -4px 0.5px .5px; border: 1px solid; }", 2.0),
+            "a { margin: 0 -8px 1px 1px; border: 2px solid; }"
+        );
+        // Other units, colours, names and plain numbers stay.
+        let other = "h1.col-2px { width: 50%; color: #1e1e2e; opacity: 0.5; font-weight: 600; font-size: 2em; transition: 200ms; }";
+        assert_eq!(scale_px(other, 1.5), other);
+        assert_eq!(scale_px("a { padding: 7px; }", 1.25), "a { padding: 8.75px; }");
+        assert_eq!(scale_px("a { padding: 1px; }", 1.0 / 3.0), "a { padding: 0.33px; }");
+    }
+
+    #[test]
+    fn whole_stylesheet_scales_to_valid_css() {
+        let css = scale_px(&format!("{}\n{STYLE}", THEMES[0].css), 1.5) + &icon_css(1.5);
+        assert_eq!(css.matches("px").count(), STYLE.matches("px").count() + 3);
+        assert!(css.contains("font-size: 19.5px"), "13px body text");
+        assert!(css.contains("-gtk-icon-size: 24px"));
+    }
 
     fn names(css: &str) -> BTreeSet<&str> {
         css.lines()

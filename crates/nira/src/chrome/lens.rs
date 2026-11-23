@@ -14,6 +14,7 @@ use nira_core::reader::SlotImage;
 
 use super::label;
 use crate::texture;
+use crate::theme::px;
 
 pub struct LensView {
     /// The round frame (clips the area to its rounded border).
@@ -97,7 +98,7 @@ impl LensView {
         let size = size as i32;
         let left = (x as i32 - size / 2).clamp(0, (width - size).max(0));
         let top = (y as i32 - size / 2).clamp(0, (height - size).max(0));
-        let label_top = (top + size + 8).min((height - 28).max(0));
+        let label_top = (top + size + px(8)).min((height - px(28)).max(0));
         // Setting a property GTK already has still queues a resize, so
         // only what changed is set.
         set_if(&self.root, size, gtk::Widget::width_request, |w, v| {

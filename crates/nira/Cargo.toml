@@ -19,9 +19,10 @@ async-channel = "2"
 clap = { version = "4", features = ["derive"] }
 env_logger = "0.11"
 
-# Attaching to the parent console, since the exe has no console of its own.
+# Attaching to the parent console, since the exe has no console of its own,
+# and the display's DPI for the interface size.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_System_Console"] }
+windows-sys = { version = "0.59", features = ["Win32_System_Console", "Win32_UI_HiDpi"] }
 
 # Packaging metadata for `cargo deb -p nira` (Debian/Ubuntu .deb builds).
 [package.metadata.deb]

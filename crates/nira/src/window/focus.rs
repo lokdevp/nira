@@ -148,7 +148,7 @@ impl NiraWindow {
             return;
         };
         let shown = toolbar.root.is_visible();
-        if !shown && y <= REVEAL_EDGE {
+        if !shown && y <= crate::theme::pxf(REVEAL_EDGE) {
             toolbar.root.set_visible(true);
         } else if shown && y > toolbar.root.height() as f64 + 24.0 {
             toolbar.root.set_visible(false);

@@ -19,6 +19,7 @@ pub struct KeyRow {
     reset: gtk::Button,
 }
 use crate::chrome::{accel_label, kbd};
+use crate::theme::px;
 
 impl NiraWindow {
     pub(super) fn fill_keys_page(&self, root: &gtk::Box, dialog: &gtk::Window) {
@@ -81,16 +82,16 @@ impl NiraWindow {
             if self.lookup_action(action.name()).is_none() {
                 continue;
             }
-            let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-            row.set_margin_top(6);
-            row.set_margin_bottom(6);
-            row.set_margin_start(10);
-            row.set_margin_end(6);
+            let row = gtk::Box::new(gtk::Orientation::Horizontal, px(8));
+            row.set_margin_top(px(6));
+            row.set_margin_bottom(px(6));
+            row.set_margin_start(px(10));
+            row.set_margin_end(px(6));
             let name = gtk::Label::new(Some(&t(&format!("action-{}", action.name()))));
             name.set_xalign(0.0);
             name.set_hexpand(true);
             row.append(&name);
-            let keys = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+            let keys = gtk::Box::new(gtk::Orientation::Horizontal, px(6));
             row.append(&keys);
             let button = |icon: &str, tip: String| {
                 let b = gtk::Button::from_icon_name(icon);
