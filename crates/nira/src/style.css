@@ -246,6 +246,12 @@ window.nira-main .sidebar-tabs > button:checked {
   color: @nira_text;
   font-weight: 500;
 }
+window.nira-main .sidebar-handle {
+  background: transparent;
+}
+window.nira-main .sidebar-handle:hover {
+  background: @nira_divider;
+}
 window.nira-main .sidebar-footer {
   padding: 10px 14px;
   border-top: 1px solid @nira_divider;

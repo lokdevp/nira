@@ -85,6 +85,9 @@ pub struct Appearance {
     pub focus_show_thumbnails: bool,
     /// The View panel in focus mode, remembered apart from normal mode.
     pub focus_show_view_panel: bool,
+    /// The page sidebar's width in pixels, dragged from its edge; shared
+    /// by normal and focus mode. The app clamps it to the range it allows.
+    pub sidebar_width: i32,
     /// Fade the page bar and click zones out while reading.
     pub auto_hide_controls: bool,
     /// Show the floating page bar outside focus mode.
@@ -117,6 +120,7 @@ impl Default for Appearance {
             show_view_panel: false,
             focus_show_thumbnails: false,
             focus_show_view_panel: false,
+            sidebar_width: 232,
             auto_hide_controls: true,
             show_page_bar: true,
             show_focus_progress: true,

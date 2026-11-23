@@ -207,6 +207,7 @@ impl NiraWindow {
         let imp = win.imp();
         imp.reader.replace(Some(reader));
         imp.settings.replace(settings);
+        win.apply_sidebar_width();
         imp.bookmarks.replace(Bookmarks::load());
         imp.history.replace(History::load());
         win.update_background();

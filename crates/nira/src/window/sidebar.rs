@@ -12,13 +12,18 @@ use nira_core::thumbs::{visible_cells, wanted_order};
 use nira_core::workers::{ThumbCmd, ThumbResult};
 
 use super::NiraWindow;
-use crate::chrome::sidebar::{self, BookmarkRow, Sidebar};
+use crate::chrome::sidebar::{BookmarkRow, Sidebar};
 use crate::texture;
 use crate::workers;
 
 impl NiraWindow {
-    pub(super) fn build_sidebar(&self) -> gtk::Box {
+    pub(super) fn build_sidebar(&self) -> gtk::Overlay {
         let side = Sidebar::new();
+        side.connect_resize(glib::clone!(
+            #[weak(rename_to = win)]
+            self,
+            move |width, done| win.on_sidebar_resized(width, done)
+        ));
         side.grid.connect_child_activated(glib::clone!(
             #[weak(rename_to = win)]
             self,
@@ -130,7 +135,7 @@ impl NiraWindow {
             adj.page_size(),
             row_h,
             top,
-            sidebar::COLUMNS,
+            side.columns(),
             pages.len(),
         );
         let order = wanted_order(page, pages.len(), visible);
@@ -145,6 +150,24 @@ impl NiraWindow {
                 pages,
                 indices: order,
             });
+        }
+    }
+
+    /// The saved sidebar width. The window is built before the settings
+    /// are loaded.
+    pub(super) fn apply_sidebar_width(&self) {
+        let width = self.imp_settings().appearance.sidebar_width;
+        if let Some(side) = self.imp().sidebar.get() {
+            side.set_width(width);
+        }
+    }
+
+    /// The sidebar's edge was dragged: save the width once the drag ends.
+    /// The grid keeps its top page itself, and the thumbnails follow its
+    /// new layout through the adjustment.
+    fn on_sidebar_resized(&self, width: i32, done: bool) {
+        if done && self.imp_settings().appearance.sidebar_width != width {
+            self.update_settings(|s| s.appearance.sidebar_width = width);
         }
     }
 
