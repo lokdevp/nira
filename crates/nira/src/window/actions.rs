@@ -48,7 +48,7 @@ fn toggle(action: Action, initial: bool, f: fn(&NiraWindow, bool)) -> gio::Actio
 pub(super) const FIXED_ACCELS: &[(&str, &[&str])] = &[
     ("win.open", &["<Control>o"]),
     ("win.preferences", &["<Control>comma"]),
-    ("window.close", &["<Control>w", "q"]),
+    ("window.close", &["q"]),
 ];
 
 impl NiraWindow {
@@ -142,6 +142,7 @@ impl NiraWindow {
             simple(Action::Fullscreen, |w| w.toggle_focus()),
             simple(Action::ExitFullscreen, |w| w.leave_fullscreen()),
             simple(Action::Minimize, |w| w.minimize()),
+            simple(Action::CloseBook, |w| w.close_book()),
         ]);
         // The sidebar is built before the settings are loaded.
         self.set_sidebar_visible(thumbs);

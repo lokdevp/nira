@@ -211,6 +211,37 @@ impl NiraWindow {
         ));
     }
 
+    /// Close the open book and go back to the start screen; with no book
+    /// open, close the window (the key used to do only that).
+    pub(super) fn close_book(&self) {
+        if self.with_reader(|r| r.book().is_none()) {
+            self.close();
+            return;
+        }
+        let imp = self.imp();
+        // A book still opening would replace the start screen.
+        imp.open_token.set(imp.open_token.get() + 1);
+        imp.opening.set(false);
+        // The position is already in the history: every move records it.
+        self.set_slideshow(false);
+        self.set_lens(false);
+        if imp.focus.get() {
+            self.toggle_focus();
+        }
+        self.with_reader(|r| r.close());
+        imp.textures.borrow_mut().clear();
+        *imp.pic_pages.borrow_mut() = [None, None];
+        for pic in &imp.pics {
+            pic.set_paintable(None::<&gdk::Paintable>);
+        }
+        imp.edge.take();
+        imp.book_bytes.set(0);
+        imp.book_kind.replace(None);
+        self.reset_sidebar();
+        self.refresh_welcome();
+        self.update_chrome();
+    }
+
     /// A page turn ran past the book's start or end: continue in the
     /// neighbouring book (the caller checked the setting that applies).
     /// True if one is opening.

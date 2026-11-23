@@ -93,6 +93,7 @@ actions! {
     AddBookmark => "add-bookmark", ["<Control>d"];
     EditBookmarks => "edit-bookmarks", ["<Control>b"];
     Lens => "lens", ["l"];
+    CloseBook => "close-book", ["<Control>w"];
 }
 
 /// Accelerators per action: the defaults with the user's overrides applied.

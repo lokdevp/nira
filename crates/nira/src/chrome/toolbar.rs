@@ -1,4 +1,4 @@
-//! The toolbar: Open and the page sidebar on the left; the book's title and
+//! The toolbar: Open, the page sidebar and Close book on the left; the book's title and
 //! progress between the previous/next book buttons in the middle; layout,
 //! direction, fit, zoom, the lens, bookmark, View panel and focus mode on
 //! the right.
@@ -37,7 +37,7 @@ pub struct ToolbarState<'a> {
 
 impl Toolbar {
     pub fn new() -> Toolbar {
-        // Left: Open and the page sidebar.
+        // Left: Open, the page sidebar and Close book.
         let start = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         let open = gtk::Button::new();
         let content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
@@ -54,6 +54,11 @@ impl Toolbar {
             "sidebar-show-symbolic",
             &t("action-thumbnails"),
             "win.thumbnails",
+        ));
+        start.append(&icon_button(
+            "window-close-symbolic",
+            &t("action-close-book"),
+            "win.close-book",
         ));
 
         // Middle: previous book, title and progress, next book.

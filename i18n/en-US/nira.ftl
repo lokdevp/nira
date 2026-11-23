@@ -6,6 +6,7 @@
 
 action-next-page = Next page
 action-previous-page = Previous page
+action-close-book = Close book
 action-forward-ten-pages = Forward ten pages
 action-back-ten-pages = Back ten pages
 action-first-page = First page
