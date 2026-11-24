@@ -4,9 +4,9 @@
 
 <h1 align="center">Nira</h1>
 
-<p align="center">A comic book and manga viewer for GTK4</p>
+<p align="center">A comic book and manga reader</p>
 
-Nira is a comic book and manga reader for the Linux desktop. It is written in Rust with GTK4.
+Nira is a comic book and manga reader for Linux and Windows. It is written in Rust with GTK4. It is based on [MComix](https://sourceforge.net/projects/mcomix/), and through it on Comix. It is a rewrite with its own interface, settings and file formats.
 
 ## Features
 
@@ -59,6 +59,15 @@ chmod +x nira-1.0.0-x86_64.AppImage
 
 `nira-1.0.0-linux-x86_64.tar.gz` contains the `nira` binary, a desktop file and icons. GTK 4.12 or newer must be installed. See `INSTALL.txt` inside for how to run or install it.
 
+**Windows**
+
+- `nira-setup-1.0.0.exe` installs Nira for all users, adds it to the Start menu and registers it for comic book files. It becomes the default app for `.cbz`, `.cbr`, `.cbt` and `.cb7` unless another app already handles them, and is offered under *Open with* for PDFs, archives and images.
+- `nira-1.0.0-windows-x86_64.zip` is a portable copy: unzip it anywhere and run `nira.exe`. It changes nothing in the registry, so it registers no file types.
+
+The Windows builds are not code-signed. Windows SmartScreen warns about them the first time they run: choose *More info*, then *Run anyway*. To check a download first, compare its checksum with `SHA256SUMS` (see below).
+
+ZIP, TAR and 7z books open out of the box. RAR, PDF and LHA need `7z`, `unrar` or `mutool` on your `PATH`.
+
 **Verifying downloads**
 
 Each release has a `SHA256SUMS` file. In the folder holding the downloads:
@@ -67,13 +76,17 @@ Each release has a `SHA256SUMS` file. In the folder holding the downloads:
 sha256sum -c --ignore-missing SHA256SUMS
 ```
 
+On Windows, in PowerShell, print a file's checksum and compare it with its line in `SHA256SUMS`:
+
+```powershell
+Get-FileHash nira-setup-1.0.0.exe -Algorithm SHA256
+```
+
 To check that a file was built by Nira's release workflow, use the GitHub CLI:
 
 ```sh
 gh attestation verify nira-1.0.0-x86_64.AppImage --repo lokdevp/nira
 ```
-
-Windows builds are not released yet.
 
 ## Building from source
 

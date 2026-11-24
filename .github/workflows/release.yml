@@ -105,9 +105,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    # Windows is built above (download it from the run page to test) but is
-    # not released until it has been tested, so the release doesn't wait on it.
-    needs: [linux, appimage]
+    needs: [linux, appimage, windows-cross]
     runs-on: ubuntu-24.04
     if: startsWith(github.ref, 'refs/tags/v')
     # Job-level permissions replace the workflow-level ones, so contents is
@@ -125,10 +123,15 @@ jobs:
         with:
           name: appimage
           path: artifacts/appimage
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows
+          path: artifacts/windows
       - name: Write SHA256SUMS
         run: |
           cd artifacts
-          find . -type f \( -name '*.deb' -o -name '*.tar.gz' -o -name '*.AppImage' \) \
+          find . -type f \( -name '*.deb' -o -name '*.tar.gz' -o -name '*.AppImage' \
+            -o -name '*.zip' -o -name '*.exe' \) \
             -exec sha256sum {} + | sed 's|  .*/|  |' | sort -k2 > SHA256SUMS
           cat SHA256SUMS
       # Records that each file in SHA256SUMS was built by this workflow from
