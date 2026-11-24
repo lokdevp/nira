@@ -43,7 +43,7 @@ Download a package from the [Releases](https://github.com/lokdevp/nira/releases)
 **Debian / Ubuntu**
 
 ```sh
-sudo apt install ./nira_1.0.0-1_amd64.deb
+sudo apt install ./nira_1.1.0-1_amd64.deb
 ```
 
 The package recommends `unrar`, `p7zip-full` and `mupdf-tools` for RAR, 7z/LHA and PDF.
@@ -51,18 +51,18 @@ The package recommends `unrar`, `p7zip-full` and `mupdf-tools` for RAR, 7z/LHA a
 **Any Linux distribution (AppImage)**
 
 ```sh
-chmod +x nira-1.0.0-x86_64.AppImage
-./nira-1.0.0-x86_64.AppImage
+chmod +x nira-1.1.0-x86_64.AppImage
+./nira-1.1.0-x86_64.AppImage
 ```
 
 **Tarball**
 
-`nira-1.0.0-linux-x86_64.tar.gz` contains the `nira` binary, a desktop file and icons. GTK 4.12 or newer must be installed. See `INSTALL.txt` inside for how to run or install it.
+`nira-1.1.0-linux-x86_64.tar.gz` contains the `nira` binary, a desktop file and icons. GTK 4.12 or newer must be installed. See `INSTALL.txt` inside for how to run or install it.
 
 **Windows**
 
-- `nira-setup-1.0.0.exe` installs Nira for all users, adds it to the Start menu and registers it for comic book files. It becomes the default app for `.cbz`, `.cbr`, `.cbt` and `.cb7` unless another app already handles them, and is offered under *Open with* for PDFs, archives and images.
-- `nira-1.0.0-windows-x86_64.zip` is a portable copy: unzip it anywhere and run `nira.exe`. It changes nothing in the registry, so it registers no file types.
+- `nira-setup-1.1.0.exe` installs Nira for all users, adds it to the Start menu and registers it for comic book files. It becomes the default app for `.cbz`, `.cbr`, `.cbt` and `.cb7` unless another app already handles them, and is offered under *Open with* for PDFs, archives and images.
+- `nira-1.1.0-windows-x86_64.zip` is a portable copy: unzip it anywhere and run `nira.exe`. It changes nothing in the registry, so it registers no file types.
 
 The Windows builds are not code-signed. Windows SmartScreen warns about them the first time they run: choose *More info*, then *Run anyway*. To check a download first, compare its checksum with `SHA256SUMS` (see below).
 
@@ -79,13 +79,13 @@ sha256sum -c --ignore-missing SHA256SUMS
 On Windows, in PowerShell, print a file's checksum and compare it with its line in `SHA256SUMS`:
 
 ```powershell
-Get-FileHash nira-setup-1.0.0.exe -Algorithm SHA256
+Get-FileHash nira-setup-1.1.0.exe -Algorithm SHA256
 ```
 
 To check that a file was built by Nira's release workflow, use the GitHub CLI:
 
 ```sh
-gh attestation verify nira-1.0.0-x86_64.AppImage --repo lokdevp/nira
+gh attestation verify nira-1.1.0-x86_64.AppImage --repo lokdevp/nira
 ```
 
 ## Building from source

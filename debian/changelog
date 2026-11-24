@@ -1,3 +1,15 @@
+nira (1.1.0-1) unstable; urgency=low
+
+  * Windows builds are released: an installer that registers comic book
+    file types, and a portable zip. Both are unsigned.
+  * New: Close book command, resizable page sidebar, and an interface size
+    that follows the display.
+  * Fixes: opened books are stored under an absolute path, the sidebar
+    resize strip stays off the scrollbar, and no console window opens on
+    Windows.
+
+ -- lokesh <lokdevp@gmail.com>  Tue, 24 Nov 2026 00:00:00 +0530
+
 nira (1.0.0-1) unstable; urgency=low
 
   * Rebuilt as a Cargo workspace (nira-core + nira). Settings move to
