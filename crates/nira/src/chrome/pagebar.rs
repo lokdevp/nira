@@ -5,8 +5,7 @@
 use gtk::prelude::*;
 use nira_core::i18n::t;
 
-use super::{icon_toggle, label, vsep};
-use crate::theme::px;
+use super::{hbox, icon_toggle, label, vsep};
 
 pub struct PageBar {
     pub root: gtk::Box,
@@ -35,22 +34,15 @@ fn zone(icon: &str, action: &str, align: gtk::Align) -> gtk::Button {
     b.set_action_name(Some(action));
     b.set_halign(align);
     b.set_valign(gtk::Align::Fill);
-    // Leave the page bar's strip free.
-    b.set_margin_bottom(px(88));
     b
 }
 
 impl PageBar {
     pub fn new() -> PageBar {
-        let root = gtk::Box::new(gtk::Orientation::Horizontal, px(8));
-        root.add_css_class("pagebar");
+        let root = hbox("pagebar");
         root.add_css_class("autohide");
         root.set_halign(gtk::Align::Center);
         root.set_valign(gtk::Align::End);
-        root.set_margin_bottom(px(20));
-        root.set_margin_start(px(16));
-        root.set_margin_end(px(16));
-        root.set_size_request(px(620), -1);
 
         let left = nav_button("go-previous-symbolic", "win.page-left");
         let right = nav_button("go-next-symbolic", "win.page-right");
@@ -58,8 +50,6 @@ impl PageBar {
         scale.set_draw_value(false);
         scale.set_hexpand(true);
         scale.set_focusable(false);
-        scale.set_margin_start(px(6));
-        scale.set_margin_end(px(6));
         let count = label("", &["mono", "count"]);
         let slideshow = icon_toggle(
             "media-playback-start-symbolic",

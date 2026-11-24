@@ -16,8 +16,6 @@ pub mod welcome;
 
 use gtk::prelude::*;
 
-use crate::theme::px;
-
 pub fn icon_button(icon: &str, tooltip: &str, action: &str) -> gtk::Button {
     let b = gtk::Button::from_icon_name(icon);
     b.add_css_class("icon-btn");
@@ -58,6 +56,24 @@ pub fn vsep() -> gtk::Box {
     b
 }
 
+/// A horizontal box with the CSS class `class`. Its spacing, margins and
+/// sizes come from that class in `style.css` (spacing as `border-spacing`),
+/// so the interface size scales them with the rest of the stylesheet.
+pub fn hbox(class: &str) -> gtk::Box {
+    styled_box(gtk::Orientation::Horizontal, class)
+}
+
+/// A vertical box with the CSS class `class`, styled as for `hbox`.
+pub fn vbox(class: &str) -> gtk::Box {
+    styled_box(gtk::Orientation::Vertical, class)
+}
+
+fn styled_box(orientation: gtk::Orientation, class: &str) -> gtk::Box {
+    let b = gtk::Box::new(orientation, 0);
+    b.add_css_class(class);
+    b
+}
+
 pub fn label(text: &str, classes: &[&str]) -> gtk::Label {
     let l = gtk::Label::new(Some(text));
     for c in classes {
@@ -69,8 +85,7 @@ pub fn label(text: &str, classes: &[&str]) -> gtk::Label {
 /// A segmented control over a string-state action: one button per
 /// `(label, target)`. The action's state checks the matching button.
 pub fn segmented(action: &str, items: &[(&str, &str)]) -> gtk::Box {
-    let group = gtk::Box::new(gtk::Orientation::Horizontal, px(2));
-    group.add_css_class("segmented");
+    let group = hbox("segmented");
     group.set_valign(gtk::Align::Center);
     for (text, target) in items {
         let b = gtk::ToggleButton::with_label(text);

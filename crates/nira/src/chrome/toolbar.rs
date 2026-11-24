@@ -8,8 +8,7 @@ use gtk::prelude::*;
 use nira_core::i18n::{t, t_args};
 use nira_core::zoom::FitMode;
 
-use super::{icon_button, icon_toggle, label, segmented, vsep};
-use crate::theme::px;
+use super::{hbox, icon_button, icon_toggle, label, segmented, vsep};
 
 pub struct Toolbar {
     /// Holds the bar without imposing its width on the window: narrow
@@ -39,9 +38,9 @@ pub struct ToolbarState<'a> {
 impl Toolbar {
     pub fn new() -> Toolbar {
         // Left: Open, the page sidebar and Close book.
-        let start = gtk::Box::new(gtk::Orientation::Horizontal, px(4));
+        let start = hbox("toolbar-start");
         let open = gtk::Button::new();
-        let content = gtk::Box::new(gtk::Orientation::Horizontal, px(8));
+        let content = hbox("toolbar-open");
         content.append(&gtk::Image::from_icon_name("folder-open-symbolic"));
         content.append(&gtk::Label::new(Some(&t("toolbar-open"))));
         open.set_child(Some(&content));
@@ -63,7 +62,7 @@ impl Toolbar {
         ));
 
         // Middle: previous book, title and progress, next book.
-        let center = gtk::Box::new(gtk::Orientation::Horizontal, px(6));
+        let center = hbox("toolbar-center");
         let prev = icon_button(
             "media-skip-backward-symbolic",
             &t("toolbar-previous-book"),
@@ -87,7 +86,7 @@ impl Toolbar {
         center.append(&next);
 
         // Right: layout, direction, fit, zoom, lens | bookmark, panel, focus.
-        let end = gtk::Box::new(gtk::Orientation::Horizontal, px(8));
+        let end = hbox("toolbar-end");
         let layout = segmented(
             "win.page-layout",
             &[

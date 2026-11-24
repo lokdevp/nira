@@ -7,8 +7,7 @@ use gtk::prelude::*;
 use nira_core::i18n::t;
 use nira_core::settings::Settings;
 
-use super::label;
-use crate::theme::px;
+use super::{hbox, label, vbox};
 
 /// Background presets: (action target, swatch CSS class, colour). `auto`
 /// follows the shown page's border colour.
@@ -53,11 +52,11 @@ pub struct ViewPanel {
 }
 
 fn section(title: &str) -> (gtk::Box, gtk::Box) {
-    let b = gtk::Box::new(gtk::Orientation::Vertical, px(14));
+    let b = vbox("panel-section");
     let heading = label(&title.to_uppercase(), &["section-title"]);
     heading.set_xalign(0.0);
     b.append(&heading);
-    let body = gtk::Box::new(gtk::Orientation::Vertical, px(14));
+    let body = vbox("panel-section");
     b.append(&body);
     (b, body)
 }
@@ -65,8 +64,8 @@ fn section(title: &str) -> (gtk::Box, gtk::Box) {
 /// A row with a label (and optional hint below it) and a control at the
 /// end.
 fn row(title: &str, hint: Option<&str>, control: &impl IsA<gtk::Widget>) -> gtk::Box {
-    let r = gtk::Box::new(gtk::Orientation::Horizontal, px(12));
-    let text = gtk::Box::new(gtk::Orientation::Vertical, px(2));
+    let r = hbox("setting-row");
+    let text = vbox("setting-text");
     text.set_hexpand(true);
     let t = gtk::Label::new(Some(title));
     t.set_xalign(0.0);
@@ -93,7 +92,7 @@ fn switch(action: &str) -> gtk::Switch {
 
 /// A labelled 0–100 slider with its value shown at the right.
 fn slider(title: &str) -> (gtk::Box, gtk::Scale, gtk::Label) {
-    let b = gtk::Box::new(gtk::Orientation::Vertical, px(4));
+    let b = vbox("panel-slider");
     let top = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     let t = gtk::Label::new(Some(title));
     t.set_hexpand(true);
@@ -111,8 +110,7 @@ fn slider(title: &str) -> (gtk::Box, gtk::Scale, gtk::Label) {
 
 impl ViewPanel {
     pub fn new() -> ViewPanel {
-        let body = gtk::Box::new(gtk::Orientation::Vertical, px(22));
-        body.add_css_class("view-panel-body");
+        let body = vbox("view-panel-body");
 
         let header = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         let title = label(&t("panel-title"), &["panel-title"]);
@@ -141,10 +139,10 @@ impl ViewPanel {
 
         // Background.
         let (background, rows) = section(&t("panel-background"));
-        let swatches = gtk::Box::new(gtk::Orientation::Horizontal, px(8));
+        let swatches = hbox("swatches");
         swatches.set_homogeneous(true);
         for (name, class, _) in BACKGROUNDS {
-            let content = gtk::Box::new(gtk::Orientation::Vertical, px(4));
+            let content = vbox("swatch-content");
             let fill = gtk::Box::new(gtk::Orientation::Horizontal, 0);
             fill.add_css_class("swatch-fill");
             fill.add_css_class(class);
@@ -223,7 +221,6 @@ impl ViewPanel {
         root.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
         root.set_child(Some(&body));
         root.add_css_class("view-panel");
-        root.set_size_request(px(288), -1);
         // The rows' labels expand; without this the panel would take a
         // share of the window's spare width from the page.
         root.set_hexpand(false);

@@ -9,9 +9,9 @@ use nira_core::scroll::{Place, SpreadLayout};
 use nira_core::zoom::{FitMode, ZoomModel};
 
 use super::NiraWindow;
+use crate::chrome::hbox;
 use crate::chrome::toolbar::Toolbar;
 use crate::texture::{self, SizedPaintable};
-use crate::theme::px;
 
 impl NiraWindow {
     /// The area pages are fitted into. Before the window is mapped the
@@ -253,11 +253,8 @@ impl NiraWindow {
             .modal(true)
             .resizable(false)
             .build();
-        let row = gtk::Box::new(gtk::Orientation::Horizontal, px(10));
-        row.set_margin_top(px(16));
-        row.set_margin_bottom(px(16));
-        row.set_margin_start(px(16));
-        row.set_margin_end(px(16));
+        dialog.add_css_class("nira-dialog");
+        let row = hbox("goto-row");
         let spin = gtk::SpinButton::with_range(1.0, total as f64, 1.0);
         spin.set_value(page as f64);
         let of = gtk::Label::new(Some(&format!("/ {total}")));

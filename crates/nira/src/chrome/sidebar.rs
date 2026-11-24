@@ -13,7 +13,7 @@ use gtk::prelude::*;
 use nira_core::i18n::{t, t_args};
 use nira_core::scroll::reveal_value;
 
-use super::label;
+use super::{hbox, label, vbox};
 use crate::theme::{px, pxf, unpx};
 
 // Sizes here are logical pixels, as in the design and `style.css`. The
@@ -336,8 +336,7 @@ pub struct BookmarkRow {
 
 impl Sidebar {
     pub fn new() -> Sidebar {
-        let tabs = gtk::Box::new(gtk::Orientation::Horizontal, px(4));
-        tabs.add_css_class("sidebar-tabs");
+        let tabs = hbox("sidebar-tabs");
         // Each tab is a label, or in one-column mode an icon with the label
         // as tooltip; the labels ellipsize rather than hold the sidebar wide.
         let tab = |text: &str, icon: &str| {
@@ -345,7 +344,7 @@ impl Sidebar {
             label.set_ellipsize(gtk::pango::EllipsizeMode::End);
             let icon = gtk::Image::from_icon_name(icon);
             icon.set_visible(false);
-            let b = gtk::Box::new(gtk::Orientation::Horizontal, px(6));
+            let b = hbox("tab-content");
             b.append(&icon);
             b.append(&label);
             let button = gtk::ToggleButton::new();
@@ -383,8 +382,7 @@ impl Sidebar {
         bookmarks.add_css_class("bookmark-list");
         bookmarks.set_selection_mode(gtk::SelectionMode::None);
         bookmarks.set_activate_on_single_click(true);
-        let bookmarks_empty = label(&t("sidebar-no-bookmarks"), &["dim"]);
-        bookmarks_empty.set_margin_top(px(24));
+        let bookmarks_empty = label(&t("sidebar-no-bookmarks"), &["dim", "bookmarks-empty"]);
         bookmarks_empty.set_wrap(true);
         let bm_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
         bm_box.append(&bookmarks);
@@ -499,7 +497,7 @@ impl Sidebar {
         let mut cells = self.cells.borrow_mut();
         cells.clear();
         for (idx, name) in names.iter().enumerate() {
-            let cell = gtk::Box::new(gtk::Orientation::Vertical, px(6));
+            let cell = vbox("thumb-cell");
             let overlay = gtk::Overlay::new();
             let picture = gtk::Picture::new();
             picture.set_can_shrink(true);
@@ -512,7 +510,6 @@ impl Sidebar {
             ribbon.add_css_class("ribbon");
             ribbon.set_halign(gtk::Align::End);
             ribbon.set_valign(gtk::Align::Start);
-            ribbon.set_margin_end(px(4));
             ribbon.set_visible(false);
             overlay.add_overlay(&ribbon);
             cell.append(&overlay);
@@ -578,9 +575,9 @@ impl Sidebar {
         let mut images = self.bookmark_images.borrow_mut();
         images.clear();
         for row in rows {
-            let b = gtk::Box::new(gtk::Orientation::Horizontal, px(10));
+            let b = hbox("bookmark-row");
             let image = gtk::Image::new();
-            image.set_pixel_size(px(44));
+            image.add_css_class("bookmark-thumb");
             if let Some(tex) = &row.thumb {
                 image.set_paintable(Some(tex));
             }

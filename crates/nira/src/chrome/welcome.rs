@@ -8,8 +8,7 @@ use gtk::{gdk, glib};
 use nira_core::history::Entry;
 use nira_core::i18n::{t, t_args};
 
-use super::{kbd, label};
-use crate::theme::px;
+use super::{hbox, kbd, label, vbox};
 
 /// Formats the archive layer opens.
 const FORMATS: [&str; 6] = ["CBZ", "CBR", "CB7", "CBT", "PDF", "LHA"];
@@ -27,9 +26,9 @@ pub struct Welcome {
 impl Welcome {
     pub fn new() -> Welcome {
         // Left: heading and drop zone.
-        let left = gtk::Box::new(gtk::Orientation::Vertical, px(20));
+        let left = vbox("welcome-left");
         left.set_hexpand(true);
-        let heading = gtk::Box::new(gtk::Orientation::Vertical, px(6));
+        let heading = vbox("welcome-heading");
         let title = label(&t("welcome-title"), &["welcome-title"]);
         title.set_xalign(0.0);
         let sub = label(&t("welcome-sub"), &["welcome-sub"]);
@@ -39,26 +38,24 @@ impl Welcome {
         heading.append(&sub);
         left.append(&heading);
 
-        let zone = gtk::Box::new(gtk::Orientation::Vertical, px(18));
-        zone.add_css_class("dropzone");
+        let zone = vbox("dropzone");
         zone.set_vexpand(true);
-        let inner = gtk::Box::new(gtk::Orientation::Vertical, px(18));
+        let inner = vbox("drop-inner");
         inner.set_valign(gtk::Align::Center);
         inner.set_vexpand(true);
         let icon = gtk::Image::from_icon_name("folder-download-symbolic");
-        icon.set_pixel_size(px(34));
         icon.add_css_class("drop-icon");
         icon.set_halign(gtk::Align::Center);
         inner.append(&icon);
-        let texts = gtk::Box::new(gtk::Orientation::Vertical, px(4));
+        let texts = vbox("drop-texts");
         texts.append(&label(&t("welcome-drop"), &["drop-title"]));
         texts.append(&label(&t("welcome-or"), &["dim"]));
         inner.append(&texts);
 
-        let buttons = gtk::Box::new(gtk::Orientation::Horizontal, px(10));
+        let buttons = hbox("drop-buttons");
         buttons.set_halign(gtk::Align::Center);
         let open = gtk::Button::new();
-        let b = gtk::Box::new(gtk::Orientation::Horizontal, px(10));
+        let b = hbox("drop-open");
         b.append(&gtk::Label::new(Some(&t("welcome-open-file"))));
         b.append(&kbd("Ctrl O"));
         open.set_child(Some(&b));
@@ -71,7 +68,7 @@ impl Welcome {
         buttons.append(&folder);
         inner.append(&buttons);
 
-        let chips = gtk::Box::new(gtk::Orientation::Horizontal, px(6));
+        let chips = hbox("drop-chips");
         chips.set_halign(gtk::Align::Center);
         for f in FORMATS {
             chips.append(&label(f, &["chip", "mono"]));
@@ -82,10 +79,9 @@ impl Welcome {
         left.append(&zone);
 
         // Right: recently read books.
-        let right = gtk::Box::new(gtk::Orientation::Vertical, px(14));
-        right.set_size_request(px(440), -1);
+        let right = vbox("welcome-right");
         right.set_hexpand(false);
-        let head = gtk::Box::new(gtk::Orientation::Horizontal, px(8));
+        let head = hbox("recent-head");
         let h = label(&t("welcome-continue"), &["section-heading"]);
         h.set_hexpand(true);
         h.set_xalign(0.0);
@@ -113,8 +109,7 @@ impl Welcome {
         note.set_wrap(true);
         right.append(&note);
 
-        let root = gtk::Box::new(gtk::Orientation::Horizontal, px(40));
-        root.add_css_class("welcome");
+        let root = hbox("welcome");
         root.append(&left);
         root.append(&right);
         Welcome {
@@ -194,19 +189,18 @@ pub fn when_label(now: &glib::DateTime, then: &glib::DateTime) -> String {
 
 fn history_row(e: &Entry, now: Option<&glib::DateTime>) -> (gtk::Box, gtk::Picture) {
     let path = Path::new(&e.path);
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, px(14));
+    let row = hbox("recent-row");
     let cover = gtk::Picture::new();
-    cover.set_size_request(px(46), px(67));
     cover.set_can_shrink(true);
     cover.set_content_fit(gtk::ContentFit::Cover);
     cover.add_css_class("cover");
     cover.set_valign(gtk::Align::Center);
     row.append(&cover);
 
-    let col = gtk::Box::new(gtk::Orientation::Vertical, px(6));
+    let col = vbox("recent-text");
     col.set_hexpand(true);
     col.set_valign(gtk::Align::Center);
-    let top = gtk::Box::new(gtk::Orientation::Horizontal, px(10));
+    let top = hbox("recent-top");
     let mut name = path
         .file_name()
         .map(|s| s.to_string_lossy().into_owned())
@@ -231,7 +225,7 @@ fn history_row(e: &Entry, now: Option<&glib::DateTime>) -> (gtk::Box, gtk::Pictu
     dir.set_xalign(0.0);
     col.append(&dir);
 
-    let bottom = gtk::Box::new(gtk::Orientation::Horizontal, px(10));
+    let bottom = hbox("recent-bottom");
     let bar = gtk::ProgressBar::new();
     bar.add_css_class("bar");
     bar.set_hexpand(true);

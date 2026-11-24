@@ -164,6 +164,16 @@ window.nira-main .toolbar {
   background: @nira_surface;
   border-bottom: 1px solid @nira_divider;
 }
+window.nira-main .toolbar-start {
+  border-spacing: 4px;
+}
+window.nira-main .toolbar-center {
+  border-spacing: 6px;
+}
+window.nira-main .toolbar-end,
+window.nira-main .toolbar-open {
+  border-spacing: 8px;
+}
 
 window.nira-main .book-title {
   font-weight: 600;
@@ -176,6 +186,7 @@ window.nira-main .book-sub {
 
 window.nira-main .segmented {
   padding: 3px;
+  border-spacing: 2px;
   border: 1px solid @nira_seg_border;
   border-radius: 11px;
   background: @nira_chrome;
@@ -229,6 +240,10 @@ window.nira-main .sidebar {
 window.nira-main .sidebar-tabs {
   padding: 10px 12px 0 12px;
   border-bottom: 1px solid @nira_divider;
+  border-spacing: 4px;
+}
+window.nira-main .sidebar-tabs .tab-content {
+  border-spacing: 6px;
 }
 window.nira-main .sidebar-tabs > button {
   min-height: 40px;
@@ -278,6 +293,9 @@ window.nira-main flowbox.thumbview > flowboxchild:selected {
   border-color: @nira_accent;
   background: @nira_selected_soft;
 }
+window.nira-main .thumb-cell {
+  border-spacing: 6px;
+}
 window.nira-main .thumb-paper {
   background: #E9E8E3;
   border-radius: 2px;
@@ -297,6 +315,7 @@ window.nira-main flowboxchild:selected .page-num {
   color: @nira_selected_fg;
 }
 window.nira-main .ribbon {
+  margin-right: 4px;
   color: #F2B45A;
 }
 
@@ -310,6 +329,15 @@ window.nira-main list.bookmark-list > row {
 }
 window.nira-main list.bookmark-list > row:hover {
   background: @nira_hover_soft;
+}
+window.nira-main .bookmark-row {
+  border-spacing: 10px;
+}
+window.nira-main .bookmark-thumb {
+  -gtk-icon-size: 44px;
+}
+window.nira-main .bookmarks-empty {
+  margin-top: 24px;
 }
 
 /* ---- reading area ---- */
@@ -332,14 +360,22 @@ window.nira-main button.click-zone {
   background: transparent;
   box-shadow: none;
   color: #6E747B;
+  /* Leave the page bar's strip free (its height, bottom margin and some
+   * room). */
+  margin-bottom: 88px;
 }
 window.nira-main button.click-zone:hover {
   background: rgba(255, 255, 255, 0.03);
   color: #ECEDEE;
 }
 
+/* 620px wide in all: min-width is the content box, inside the padding and
+ * border. */
 window.nira-main .pagebar {
+  min-width: 604px;
+  margin: 0 16px 20px 16px;
   padding: 6px 8px 6px 6px;
+  border-spacing: 8px;
   border: 1px solid @nira_overlay_border;
   border-radius: 16px;
   background: @nira_overlay;
@@ -357,6 +393,9 @@ window.nira-main .pagebar button.nav {
 }
 window.nira-main .pagebar button.nav:hover {
   background: @nira_nav_hover;
+}
+window.nira-main .pagebar scale {
+  margin: 0 6px;
 }
 window.nira-main .pagebar .count {
   font-size: 13px;
@@ -420,12 +459,35 @@ window.nira-main .lens {
 
 /* ---- view settings panel ---- */
 
+/* 288px wide with its border. */
 window.nira-main .view-panel {
+  min-width: 287px;
   background: @nira_surface;
   border-left: 1px solid @nira_divider;
 }
 window.nira-main .view-panel-body {
   padding: 18px 20px;
+  border-spacing: 22px;
+}
+window.nira-main .panel-section {
+  border-spacing: 14px;
+}
+window.nira-main .panel-slider,
+window.nira-main .swatch-content {
+  border-spacing: 4px;
+}
+window.nira-main .swatches {
+  border-spacing: 8px;
+}
+/* A label (with an optional hint) and a control, in the View panel and
+ * Preferences. */
+window.nira-main .setting-row,
+window.nira-dialog .setting-row {
+  border-spacing: 12px;
+}
+window.nira-main .setting-text,
+window.nira-dialog .setting-text {
+  border-spacing: 2px;
 }
 window.nira-main .panel-title {
   font-size: 15px;
@@ -498,12 +560,21 @@ window.nira-main .statusbar {
   border-top: 1px solid @nira_chrome_border;
   color: @nira_text_dim;
   font-size: 12px;
+  border-spacing: 18px;
+}
+window.nira-main .status-hint {
+  border-spacing: 6px;
+}
+window.nira-main .status-keys {
+  border-spacing: 4px;
 }
 
 /* ---- focus mode ---- */
 
 window.nira-main .focus-hint {
+  margin-top: 18px;
   padding: 8px 8px 8px 16px;
+  border-spacing: 14px;
   border: 1px solid @nira_overlay_border;
   border-radius: 999px;
   background: @nira_overlay_hint;
@@ -519,10 +590,14 @@ window.nira-main .focus-hint button {
   color: @nira_text;
   font-size: 12px;
 }
+window.nira-main .focus-hint .focus-exit {
+  border-spacing: 8px;
+}
 window.nira-main .focus-hint .kbd {
   border-color: @nira_overlay_kbd;
 }
 window.nira-main .focus-label {
+  margin: 0 20px 14px 0;
   font-size: 12px;
   color: #8A9098;
 }
@@ -542,6 +617,13 @@ window.nira-main progressbar.thin > trough > progress {
 
 window.nira-main .welcome {
   padding: 56px 72px 40px 72px;
+  border-spacing: 40px;
+}
+window.nira-main .welcome-left {
+  border-spacing: 20px;
+}
+window.nira-main .welcome-heading {
+  border-spacing: 6px;
 }
 window.nira-main .welcome-title {
   font-size: 28px;
@@ -559,6 +641,20 @@ window.nira-main .dropzone {
   border: 2px solid @nira_track;
   border-radius: 20px;
   background: @nira_surface;
+  border-spacing: 18px;
+}
+window.nira-main .drop-inner {
+  border-spacing: 18px;
+}
+window.nira-main .drop-texts {
+  border-spacing: 4px;
+}
+window.nira-main .drop-buttons,
+window.nira-main .drop-open {
+  border-spacing: 10px;
+}
+window.nira-main .drop-chips {
+  border-spacing: 6px;
 }
 window.nira-main .dropzone:drop(active),
 window.nira-main:drop(active) .dropzone {
@@ -571,6 +667,7 @@ window.nira-main .drop-icon {
   border-radius: 20px;
   background: @nira_selected_soft;
   color: @nira_accent;
+  -gtk-icon-size: 34px;
 }
 window.nira-main .drop-title {
   font-size: 18px;
@@ -582,6 +679,13 @@ window.nira-main .chip {
   background: @nira_raised;
   color: @nira_text_soft;
   font-size: 11px;
+}
+window.nira-main .welcome-right {
+  min-width: 440px;
+  border-spacing: 14px;
+}
+window.nira-main .recent-head {
+  border-spacing: 8px;
 }
 window.nira-main .section-heading {
   font-size: 15px;
@@ -600,8 +704,20 @@ window.nira-main list.recent-list > row {
 window.nira-main list.recent-list > row:hover {
   background: @nira_surface_hover;
 }
+window.nira-main .recent-row {
+  border-spacing: 14px;
+}
 window.nira-main .cover {
+  min-width: 46px;
+  min-height: 67px;
   background: #E9E8E3;
+}
+window.nira-main .recent-text {
+  border-spacing: 6px;
+}
+window.nira-main .recent-top,
+window.nira-main .recent-bottom {
+  border-spacing: 10px;
 }
 window.nira-main .recent-name {
   font-weight: 500;
@@ -655,4 +771,26 @@ window.nira-main popover modelbutton:selected label {
 }
 window.nira-main popover separator {
   background: @nira_border;
+}
+
+/* ---- dialogs (Preferences with its keybinding editor, Go to page) ----
+ * Plain GTK windows: only their layout is set here. */
+
+window.nira-dialog .prefs-page {
+  margin: 18px;
+  border-spacing: 14px;
+}
+window.nira-dialog .prefs-heading {
+  margin-top: 6px;
+}
+window.nira-dialog .key-row {
+  margin: 6px 6px 6px 10px;
+  border-spacing: 8px;
+}
+window.nira-dialog .key-keys {
+  border-spacing: 6px;
+}
+window.nira-dialog .goto-row {
+  margin: 16px;
+  border-spacing: 10px;
 }

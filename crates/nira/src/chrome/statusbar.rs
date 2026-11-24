@@ -4,8 +4,7 @@
 use gtk::prelude::*;
 use nira_core::i18n::t;
 
-use super::{accel_label, kbd, label};
-use crate::theme::px;
+use super::{accel_label, hbox, kbd, label};
 
 pub struct StatusBar {
     pub root: gtk::Box,
@@ -26,8 +25,7 @@ pub struct PageStatus {
 
 impl StatusBar {
     pub fn new() -> StatusBar {
-        let root = gtk::Box::new(gtk::Orientation::Horizontal, px(18));
-        root.add_css_class("statusbar");
+        let root = hbox("statusbar");
         let dims = gtk::Label::new(None);
         let file = label("", &["mono"]);
         file.set_ellipsize(gtk::pango::EllipsizeMode::Middle);
@@ -40,14 +38,14 @@ impl StatusBar {
         root.append(&spacer);
 
         let hint = |keys: &gtk::Box, text: &str| {
-            let b = gtk::Box::new(gtk::Orientation::Horizontal, px(6));
+            let b = hbox("status-hint");
             b.append(keys);
             b.append(&gtk::Label::new(Some(text)));
             root.append(&b);
         };
-        let turn_keys = gtk::Box::new(gtk::Orientation::Horizontal, px(4));
+        let turn_keys = hbox("status-keys");
         hint(&turn_keys, &t("hint-turn-page"));
-        let focus_keys = gtk::Box::new(gtk::Orientation::Horizontal, px(4));
+        let focus_keys = hbox("status-keys");
         hint(&focus_keys, &t("hint-focus-mode"));
         StatusBar {
             root,

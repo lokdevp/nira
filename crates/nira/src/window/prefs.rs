@@ -12,6 +12,7 @@ const UI_SCALES: [u32; 5] = [100, 125, 150, 175, 200];
 use nira_core::zoom::{FitMode, FitSizeAxis};
 
 use super::NiraWindow;
+use crate::chrome::{hbox, vbox};
 use crate::theme::{self, px};
 
 /// A page of the dialog: rows of label and control.
@@ -21,25 +22,21 @@ struct Page {
 
 impl Page {
     fn new() -> Page {
-        let root = gtk::Box::new(gtk::Orientation::Vertical, px(14));
-        root.set_margin_top(px(18));
-        root.set_margin_bottom(px(18));
-        root.set_margin_start(px(18));
-        root.set_margin_end(px(18));
+        let root = vbox("prefs-page");
         Page { root }
     }
 
     fn heading(&self, text: &str) {
         let l = gtk::Label::new(Some(text));
         l.add_css_class("heading");
+        l.add_css_class("prefs-heading");
         l.set_xalign(0.0);
-        l.set_margin_top(px(6));
         self.root.append(&l);
     }
 
     fn row(&self, title: &str, hint: Option<&str>, control: &impl IsA<gtk::Widget>) {
-        let r = gtk::Box::new(gtk::Orientation::Horizontal, px(12));
-        let text = gtk::Box::new(gtk::Orientation::Vertical, px(2));
+        let r = hbox("setting-row");
+        let text = vbox("setting-text");
         text.set_hexpand(true);
         let l = gtk::Label::new(Some(title));
         l.set_xalign(0.0);
@@ -186,6 +183,7 @@ impl NiraWindow {
             .default_width(px(560))
             .default_height(px(640))
             .build();
+        dialog.add_css_class("nira-dialog");
         let notebook = gtk::Notebook::new();
         let tab = |page: &Page, title: &str| {
             let scroll = gtk::ScrolledWindow::new();
