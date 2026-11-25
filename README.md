@@ -1,10 +1,16 @@
 <p align="center">
-  <img src="assets/nira.svg" alt="Nira logo" width="128">
+  <img src="assets/nira.svg" alt="Nira logo" width="64">
 </p>
 
 <h1 align="center">Nira</h1>
 
 <p align="center">A comic book and manga reader</p>
+
+<p align="center"><a href="https://nira.lokify.me/">nira.lokify.me</a></p>
+
+<p align="center">
+  <img src="https://nira.lokify.me/screenshots/1.0/nira-dark.webp" alt="Nira showing a two-page spread of a comic, with the page thumbnails on the left and the View panel on the right">
+</p>
 
 Nira is a comic book and manga reader for Linux and Windows. It is written in Rust with GTK4. It is based on [MComix](https://sourceforge.net/projects/mcomix/), and through it on Comix. It is a rewrite with its own interface, settings and file formats.
 
@@ -19,6 +25,21 @@ Nira is a comic book and manga reader for Linux and Windows. It is written in Ru
 - Moving on to the previous or next book in the same folder
 - Dark and light themes, or follow the desktop
 - Every key can be rebound in Preferences
+
+<table>
+  <tr>
+    <td><img src="https://nira.lokify.me/screenshots/1.0/nira-start-dark.webp" alt="The start screen: a drop area for opening a book, and a Continue reading list with covers and progress"></td>
+    <td><img src="https://nira.lokify.me/screenshots/1.0/nira-focus-dark.webp" alt="Focus mode: a two-page spread filling the screen with only a thin progress line"></td>
+    <td><img src="https://nira.lokify.me/screenshots/1.0/nira-light.webp" alt="Nira in the Light theme"></td>
+  </tr>
+  <tr>
+    <td align="center">The start screen</td>
+    <td align="center">Focus mode</td>
+    <td align="center">The Light theme</td>
+  </tr>
+</table>
+
+The comic pages in the screenshots are from <a href="https://www.peppercarrot.com/">Pepper&amp;Carrot</a> by David Revoy, under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. More screenshots, including every colour theme, are on <a href="https://nira.lokify.me/">the website</a>.
 
 ## Supported formats
 
